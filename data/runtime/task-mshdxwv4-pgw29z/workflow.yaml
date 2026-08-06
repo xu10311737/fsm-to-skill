@@ -1,0 +1,82 @@
+name: 未命名工作流
+description: ''
+nodes:
+- id: start-1
+  type: start
+  name: Start-1
+  position:
+    x: 80
+    y: 200
+  config:
+    inputs: []
+- id: code-1
+  type: code
+  name: Code-1
+  position:
+    x: 673
+    y: 226
+  config:
+    inputs:
+    - name: arg-1
+      description: 参数描述
+      type: string
+      required: true
+    code: "def main(params):\n    return {\"result\": params[\"arg-1\"]}\n"
+    outputs:
+    - name: result
+      type: string
+    timeout: 30
+    error_branch: false
+    agent_interface:
+      role: agent_entry
+      entry_id: code-1
+      input_target: code-1
+      description: Agent 输入进入此 Code 节点
+- id: llm-1
+  type: llm
+  name: Prompt-1
+  position:
+    x: 396
+    y: 265
+  config:
+    prompt: 请按我要求的执行命令一步步执行
+    agent_interface:
+      role: agent_exit
+      exit_id: llm-1
+      description: Prompt 节点输出返回 Agent
+- id: llm-2
+  type: llm
+  name: Prompt-2
+  position:
+    x: 939
+    y: 226
+  config:
+    prompt: 任务结束！
+    agent_interface:
+      role: agent_exit
+      exit_id: llm-2
+      description: Prompt 节点输出返回 Agent
+- id: end-1
+  type: end
+  name: End-1
+  position:
+    x: 1205
+    y: 226
+  config: {}
+edges:
+- id: e-start-1-out-llm-1-97970
+  source: start-1
+  target: llm-1
+  source_handle: out
+- id: e-llm-1-out-code-1-97970
+  source: llm-1
+  target: code-1
+  source_handle: out
+- id: e-code-1-out-llm-2-47512
+  source: code-1
+  target: llm-2
+  source_handle: out
+- id: e-llm-2-out-end-1-55572
+  source: llm-2
+  target: end-1
+  source_handle: out

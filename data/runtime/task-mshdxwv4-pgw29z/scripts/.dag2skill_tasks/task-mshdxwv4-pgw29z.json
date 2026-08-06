@@ -1,0 +1,19 @@
+{
+  "task-id": "task-mshdxwv4-pgw29z",
+  "created-at": 1786012865.329989,
+  "updated-at": 1786012897.817185,
+  "variables": {
+    "task-id": "task-mshdxwv4-pgw29z",
+    "arg-1": "<string>",
+    "result": "<string>"
+  },
+  "waiting-node": "llm-2",
+  "node-statuses": {
+    "start-1": "success",
+    "llm-1": "success",
+    "code-1": "success",
+    "llm-2": "waiting"
+  },
+  "finished": false,
+  "last-prompt": "任务结束！\n\n---\ntask-id: task-mshdxwv4-pgw29z"
+}

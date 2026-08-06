@@ -1,0 +1,222 @@
+name: Agent复杂工作流
+description: Agent 模式复杂工作流（Code+For+IF+Aggregate+LLM）
+nodes:
+- id: s
+  type: start
+  name: start
+  position:
+    x: 80
+    y: 200
+  config:
+    inputs:
+    - name: numbers
+      type: list
+      default: ''
+    - name: threshold
+      type: int
+      default: '1'
+- id: prep
+  type: code
+  name: prep
+  position:
+    x: 384
+    y: -149
+  config:
+    inputs:
+    - name: numbers
+      description: ''
+      type: list
+      required: true
+    - name: threshold
+      description: ''
+      type: int
+      required: true
+    code: "def main(numbers, threshold):\n    groups = []\n    for i in range(0, len(numbers),\
+      \ 2):\n        groups.append(numbers[i:i+2])\n    return {'groups': groups}\n"
+    outputs:
+    - name: groups
+      type: list
+    timeout: 30
+    error_branch: false
+    agent_interface:
+      role: agent_entry
+      entry_id: prep
+      input_target: prep
+      description: Agent 输入进入此 Code 节点
+- id: outer
+  type: for
+  name: outer
+  position:
+    x: 596
+    y: -99
+  config:
+    list_source: groups
+    body:
+      nodes:
+      - id: calc
+        type: code
+        name: calc
+        config:
+          inputs:
+          - name: row
+            type: list
+            source: item
+          - name: threshold
+            type: int
+          outputs:
+          - name: row-sum
+            type: int
+          - name: decision
+            type: string
+          code: "def main(row, threshold):\n    total = sum(row)\n    return {'row-sum':\
+            \ total, 'decision': 'big' if total > threshold else 'small'}\n"
+        position:
+          x: 300
+          y: 420
+      - id: big
+        type: if
+        name: big
+        config:
+          variable: decision
+          operator: 是
+          value: small
+          value_type: constant
+          conditions:
+          - variable: decision
+            operator: 是
+            value: small
+            value_type: constant
+          branch_mode: multi
+        position:
+          x: 540
+          y: 420
+      - id: 'yes'
+        type: code
+        name: 'yes'
+        config:
+          inputs:
+          - name: d
+            description: ''
+            type: string
+            required: true
+            source: decision
+          outputs:
+          - name: label
+            type: string
+          code: "def main(d):\n    return {'label': 'SMALL'}\n"
+        position:
+          x: 741
+          y: 87
+      - id: 'no'
+        type: code
+        name: 'no'
+        config:
+          inputs:
+          - name: d
+            description: ''
+            type: string
+            required: true
+            source: decision
+          outputs:
+          - name: label
+            type: string
+          code: "def main(d):\n    return {'label': 'BIG'}\n"
+        position:
+          x: 862
+          y: 514
+      - id: fmt
+        type: code
+        name: fmt
+        config:
+          inputs:
+          - name: row
+            type: list
+            source: item
+          - name: rs
+            type: int
+            source: row-sum
+          - name: decision
+            type: string
+          outputs:
+          - name: out
+            type: string
+          code: "def main(row, rs, decision):\n    return {'out': f\"{row}:{rs}:{decision}\"\
+            }\n"
+        position:
+          x: 1260
+          y: 420
+      edges:
+      - id: e-calc-big-out
+        source: calc
+        target: big
+        source_handle: out
+      - id: e-big-yes-if
+        source: big
+        target: 'yes'
+        source_handle: if-1
+      - id: e-big-no-else
+        source: big
+        target: 'no'
+        source_handle: else
+      - id: e-yes-fmt-out
+        source: 'yes'
+        target: fmt
+        source_handle: out
+      - id: e-no-fmt-out
+        source: 'no'
+        target: fmt
+        source_handle: out
+    collect: out
+- id: e
+  type: end
+  name: end
+  position:
+    x: 1334
+    y: 63
+  config: {}
+- id: llm-1
+  type: llm
+  name: Prompt-1
+  position:
+    x: 1018
+    y: -4
+  config:
+    prompt: 任务结束
+    agent_interface:
+      role: agent_exit
+      exit_id: llm-1
+      description: Prompt 节点输出返回 Agent
+- id: llm-2
+  type: llm
+  name: Prompt-2
+  position:
+    x: 413
+    y: 324
+  config:
+    prompt: 现在请进行一个demo验证，你需要随着我的指令执行，let us step by step
+    agent_interface:
+      role: agent_exit
+      exit_id: llm-2
+      description: Prompt 节点输出返回 Agent
+edges:
+- id: e-prep-outer-out
+  source: prep
+  target: outer
+  source_handle: out
+- id: e-outer-out-llm-1-35789
+  source: outer
+  target: llm-1
+  source_handle: out
+- id: e-llm-1-out-e-47353
+  source: llm-1
+  target: e
+  source_handle: out
+- id: e-s-out-llm-2-83536
+  source: s
+  target: llm-2
+  source_handle: out
+- id: e-llm-2-out-prep-83536
+  source: llm-2
+  target: prep
+  source_handle: out
+id: agent-complex

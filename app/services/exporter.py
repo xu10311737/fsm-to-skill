@@ -14,6 +14,7 @@
 """
 from __future__ import annotations
 
+import base64
 import json
 import re
 import shutil
@@ -102,7 +103,9 @@ def _first_prompt_content(wf: dict) -> str:
 def _export_command_context(context: dict[str, Any] | None,
                             target: Path) -> dict[str, Any]:
     merged = dict(context or {})
-    merged["main_path"] = str((target / "scripts" / "main.py").resolve())
+    # 用包内相对路径，使导出的命令可在任意平台（把 skill 包拷到 Linux/Mac
+    # 后）直接运行，而不依赖导出机上的绝对路径。
+    merged["main_path"] = str(Path("scripts") / "main.py")
     return merged
 
 
@@ -334,6 +337,7 @@ main.py 是总线程；每个 Code 节点是 Agent 输入入口，每个 Prompt 
 from __future__ import annotations
 
 import argparse
+import base64
 import contextlib
 import importlib.util
 import inspect
@@ -387,11 +391,15 @@ def _format_step_command(task_id: str, step_id: str,
                          step_param: dict[str, Any]) -> str:
     main_path = str((SCRIPTS_DIR / "main.py").resolve())
     task_text = task_id or "<task-id>"
-    return "\n".join([
-        f"python {main_path} \\",
-        f"--task_id {task_text} \\",
-        f"--step-id {step_id} \\",
-        "--step-param <下文中实际节点入参>",
+    payload = json.dumps(step_param or {}, ensure_ascii=False,
+                         separators=(",", ":"))
+    b64 = base64.urlsafe_b64encode(payload.encode("utf-8")).decode("ascii")
+    python_exe = "python3" if not sys.platform.startswith("win") else "python"
+    return " ".join([
+        f"{python_exe} '{main_path}'",
+        f"--task-id {task_text}",
+        f"--step-id {step_id}",
+        f"--step-param-b64 '{b64}'",
     ])
 
 
@@ -1334,14 +1342,20 @@ def _cli() -> int:
                         help="实际 Code 节点 id，例如 code-1")
     parser.add_argument("--step-param",
                         help="该 Code 节点的入参 JSON 字符串")
+    parser.add_argument("--step-param-b64",
+                        help="该 Code 节点的入参 JSON 的 URL-safe base64")
     ns = parser.parse_args()
     try:
         if ns.step_param:
             step_param_text = ns.step_param
+        elif ns.step_param_b64:
+            import base64 as _b64
+            step_param_text = _b64.urlsafe_b64decode(
+                ns.step_param_b64.encode("ascii")).decode("utf-8")
         else:
-            parser.error("--step-param 必须提供")
+            parser.error("--step-param 或 --step-param-b64 必须提供一个")
         step_param = json.loads(step_param_text)
-    except json.JSONDecodeError as exc:
+    except (json.JSONDecodeError, ValueError, UnicodeDecodeError) as exc:
         parser.error(f"step 参数不是合法 JSON: {exc}")
     try:
         output = main(ns.task_id, ns.step_id, step_param)

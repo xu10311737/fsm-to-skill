@@ -1,0 +1,43 @@
+{
+  "id": "run-20260806092302-ef6eac",
+  "workflow_id": "agent-complex",
+  "wf_name": "Agent复杂工作流",
+  "started_at": "2026-08-06T09:23:02.954840+00:00",
+  "status": "waiting",
+  "failed_node": null,
+  "end_node": null,
+  "waiting_node": "llm-2",
+  "waiting_prompt": "现在请进行一个demo验证，你需要随着我的指令执行，let us step by step\n\n---\ntask-id: task-mshb5glr-zilobl\n\n-------------\n## 下一个step待执行命令:\n\npython C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-mshb5glr-zilobl\\scripts\\main.py \\\n--task_id task-mshb5glr-zilobl \\\n--step-id prep \\\n--step-param <下文中实际节点入参>\n-------------\n**step-param 入参说明**:\n\n### 节点prep\n\n| 参数 | 类型 | 必填 | 描述 |\n| --- | --- | --- | --- |\n| numbers | list | 是 |  |\n| threshold | int | 是 |  |\n-------------",
+  "llm_call_count": 0,
+  "task-id": "task-mshb5glr-zilobl",
+  "task_id": "task-mshb5glr-zilobl",
+  "node_records": {
+    "s": {
+      "status": "success",
+      "duration_ms": 0.11799999629147351
+    },
+    "llm-2": {
+      "prompt": "现在请进行一个demo验证，你需要随着我的指令执行，let us step by step\n\n---\ntask-id: task-mshb5glr-zilobl\n\n-------------\n## 下一个step待执行命令:\n\npython C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-mshb5glr-zilobl\\scripts\\main.py \\\n--task_id task-mshb5glr-zilobl \\\n--step-id prep \\\n--step-param <下文中实际节点入参>\n-------------\n**step-param 入参说明**:\n\n### 节点prep\n\n| 参数 | 类型 | 必填 | 描述 |\n| --- | --- | --- | --- |\n| numbers | list | 是 |  |\n| threshold | int | 是 |  |\n-------------",
+      "prompt_output": "现在请进行一个demo验证，你需要随着我的指令执行，let us step by step\n\n---\ntask-id: task-mshb5glr-zilobl\n\n-------------\n## 下一个step待执行命令:\n\npython C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-mshb5glr-zilobl\\scripts\\main.py \\\n--task_id task-mshb5glr-zilobl \\\n--step-id prep \\\n--step-param <下文中实际节点入参>\n-------------\n**step-param 入参说明**:\n\n### 节点prep\n\n| 参数 | 类型 | 必填 | 描述 |\n| --- | --- | --- | --- |\n| numbers | list | 是 |  |\n| threshold | int | 是 |  |\n-------------",
+      "status": "success",
+      "duration_ms": 10.20540000172332
+    }
+  },
+  "variables": {
+    "task-id": {
+      "type": "string",
+      "value": "task-mshb5glr-zilobl",
+      "owner": "system"
+    },
+    "numbers": {
+      "type": "list",
+      "value": [],
+      "owner": "s"
+    },
+    "threshold": {
+      "type": "int",
+      "value": 1,
+      "owner": "s"
+    }
+  }
+}

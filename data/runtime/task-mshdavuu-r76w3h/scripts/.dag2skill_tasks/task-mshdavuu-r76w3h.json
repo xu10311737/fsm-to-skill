@@ -1,0 +1,16 @@
+{
+  "task-id": "task-mshdavuu-r76w3h",
+  "created-at": 1786011943.784443,
+  "updated-at": 1786011943.784443,
+  "variables": {
+    "task-id": "task-mshdavuu-r76w3h",
+    "numbers": [],
+    "threshold": 1
+  },
+  "waiting-node": "llm-2",
+  "node-statuses": {
+    "s": "success",
+    "llm-2": "waiting"
+  },
+  "finished": false
+}

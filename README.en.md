@@ -1,6 +1,7 @@
 # fsm to skill · DAG Workflow Orchestration → Skill Export Engine
 
 > Let the LLM return to its "reasoning" job, and hand "flow control" back to the classic, rigorous finite state machine (FSM).
+
 > A fully local, lightweight SKILL orchestration and generation tool based on a state machine (FSM).
 
 [中文](./README.md) · [Documentation](./static/docs.html) · [License](./LICENSE)
@@ -9,7 +10,9 @@
 
 ## Screenshot
 
-![Screenshot](images/screenshot.png)
+![界面预览](images/screenshot-build.png)
+
+![界面预览](images/screenshot-run.png)
 
 ---
 

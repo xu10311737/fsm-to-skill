@@ -171,7 +171,7 @@ class TestSkillMd:
         data = json.loads(
             (out / "agent_interface.json").read_text(encoding="utf-8"))
         entry = data["entries"][0]
-        assert "--task_id" in entry["command_template"]
+        assert "--task-id" in entry["command_template"]
         assert "--step-id" in entry["command_template"]
         assert "code-1" in entry["command_template"]
         assert "scripts" in entry["command_template"]
@@ -179,7 +179,7 @@ class TestSkillMd:
         # Bound workflow variables are supplied from persisted task state,
         # so the Agent must not be asked to provide them again.
         assert entry["input_schema"] == []
-        assert "--task_id" in data["agent_envelope"]["agent_command"]
+        assert "--task-id" in data["agent_envelope"]["agent_command"]
         assert "--step-id" in data["agent_envelope"]["agent_command"]
         assert "<code_node_id>" in data["agent_envelope"]["agent_command"]
         assert data["agent_envelope"]["task-id"] == "<task-id>"
@@ -197,12 +197,18 @@ class TestSkillMd:
             "main_path": str(out / "scripts" / "main.py"),
         }, "task-pwsh", "code-1", {"arg-1": "你好"})
 
-        assert command.startswith("python ")
-        assert r"C:\Python314\python.exe" not in command
-        assert "--task_id task-pwsh" in command
+        assert r"C:\Python314\python.exe" in command
+        assert "--task-id task-pwsh" in command
         assert "--step-id code-1" in command
-        assert "--step-param <下文中实际节点入参>" in command
-        assert "--step-param-b64" not in command
+        assert "--step-param-b64 '" in command
+        assert "--task_id" not in command
+        assert "--step-param <下文中实际节点入参>" not in command
+        assert "\\\n" not in command  # single-line, no POSIX continuation
+        # the base64 payload decodes back to the original step params
+        import base64 as _b64
+        import json as _json
+        b64 = command.split("--step-param-b64 '")[1].split("'")[0]
+        assert _json.loads(_b64.urlsafe_b64decode(b64)) == {"arg-1": "你好"}
 
     def test_command_template_placeholder_can_be_filled_and_run(
             self, tmp_path, factories):
@@ -286,8 +292,8 @@ class TestSkillMd:
         assert removed_heading not in proc.stdout
         assert "## 下一个step待执行命令:" in proc.stdout
         assert "**step-param 入参说明**:" in proc.stdout
-        assert "--step-param <下文中实际节点入参>" in proc.stdout
-        assert "--step-param-b64" not in proc.stdout
+        assert "--step-param-b64" in proc.stdout
+        assert "--step-param <下文中实际节点入参>" not in proc.stdout
         assert "code-2" in proc.stdout
         assert "| arg2 | string | 是 | 下一步参数 |" in proc.stdout
 

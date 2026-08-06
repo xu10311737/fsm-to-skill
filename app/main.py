@@ -261,9 +261,12 @@ def create_app(data_dir: str | Path) -> FastAPI:
     async def debug_agent(body: dict):
         """Send a Prompt exit to the configured model as the external Agent."""
         prompt = body.get("prompt")
+        messages = body.get("messages")
         task_id = body.get("task_id") or body.get("task-id")
         if not isinstance(prompt, str) or not prompt.strip():
             raise HTTPException(400, detail="prompt 字段缺失")
+        if messages is not None and not isinstance(messages, list):
+            raise HTTPException(400, detail="messages 必须是数组")
         cfg = load_config(config_path)
         agent_cfg = json.loads(json.dumps(cfg, ensure_ascii=False))
         shell_cfg = dict(agent_cfg.get("shell_tool") or {})
@@ -274,7 +277,7 @@ def create_app(data_dir: str | Path) -> FastAPI:
         llm_service = deps.build_llm_service(agent_cfg)
         try:
             started = time.perf_counter()
-            resp = await llm_service.complete(prompt)
+            resp = await llm_service.complete(prompt, messages=messages)
             duration_ms = (time.perf_counter() - started) * 1000
         except Exception as e:  # noqa: BLE001
             raise HTTPException(502, detail={
@@ -299,9 +302,12 @@ def create_app(data_dir: str | Path) -> FastAPI:
     async def debug_agent_stream(body: dict):
         """Stream one external Agent ReAct run as SSE events."""
         prompt = body.get("prompt")
+        messages = body.get("messages")
         task_id = body.get("task_id") or body.get("task-id")
         if not isinstance(prompt, str) or not prompt.strip():
             raise HTTPException(400, detail="prompt 字段缺失")
+        if messages is not None and not isinstance(messages, list):
+            raise HTTPException(400, detail="messages 必须是数组")
         cfg = load_config(config_path)
         agent_cfg = json.loads(json.dumps(cfg, ensure_ascii=False))
         shell_cfg = dict(agent_cfg.get("shell_tool") or {})
@@ -323,7 +329,8 @@ def create_app(data_dir: str | Path) -> FastAPI:
                 data_dir, str(task_id)) if task_id else None
             try:
                 if hasattr(llm_service, "complete_events"):
-                    async for item in llm_service.complete_events(prompt):
+                    async for item in llm_service.complete_events(
+                            prompt, messages=messages):
                         if item.get("event") == "agent_final" and task_id:
                             _finalize_terminal_agent_prompt(
                                 data_dir, str(task_id))
@@ -350,7 +357,7 @@ def create_app(data_dir: str | Path) -> FastAPI:
                                 handoff, ensure_ascii=False) + "\n\n"
                             return
                 else:
-                    resp = await llm_service.complete(prompt)
+                    resp = await llm_service.complete(prompt, messages=messages)
                     if task_id:
                         _finalize_terminal_agent_prompt(data_dir, str(task_id))
                     yield (

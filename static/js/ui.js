@@ -76,12 +76,14 @@ export function el(tag, attrs = {}, ...children) {
 export function parseTypedValue(type, raw) {
   switch (type) {
     case "int": {
-      const v = parseInt(raw, 10);
+      if (raw == null || raw === "") return 0;
+      const v = parseInt(String(raw).trim(), 10);
       if (Number.isNaN(v)) throw new Error(`"${raw}" 不是有效的 int`);
       return v;
     }
     case "float": {
-      const v = parseFloat(raw);
+      if (raw == null || raw === "") return 0.0;
+      const v = parseFloat(String(raw).trim());
       if (Number.isNaN(v)) throw new Error(`"${raw}" 不是有效的 float`);
       return v;
     }

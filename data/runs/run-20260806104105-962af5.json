@@ -1,0 +1,33 @@
+{
+  "id": "run-20260806104105-962af5",
+  "workflow_id": null,
+  "wf_name": "未命名工作流",
+  "started_at": "2026-08-06T10:41:05.332070+00:00",
+  "status": "waiting",
+  "failed_node": null,
+  "end_node": null,
+  "waiting_node": "llm-1",
+  "waiting_prompt": "请按我要求的执行命令一步步执行\n\n---\ntask-id: task-mshdxwv4-pgw29z\n\n-------------\n## 下一个step待执行命令:\n\n& 'C:\\Python314\\python.exe' 'C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-mshdxwv4-pgw29z\\scripts\\main.py' --task-id task-mshdxwv4-pgw29z --step-id code-1 --step-param-b64 'eyJhcmctMSI6IjxzdHJpbmc-In0='\n-------------\n**step-param 入参说明**:\n\n### 节点Code-1\n\n| 参数 | 类型 | 必填 | 描述 |\n| --- | --- | --- | --- |\n| arg-1 | string | 是 | 参数描述 |\n-------------",
+  "llm_call_count": 0,
+  "task-id": "task-mshdxwv4-pgw29z",
+  "task_id": "task-mshdxwv4-pgw29z",
+  "node_records": {
+    "start-1": {
+      "status": "success",
+      "duration_ms": 0.029699993319809437
+    },
+    "llm-1": {
+      "prompt": "请按我要求的执行命令一步步执行\n\n---\ntask-id: task-mshdxwv4-pgw29z\n\n-------------\n## 下一个step待执行命令:\n\n& 'C:\\Python314\\python.exe' 'C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-mshdxwv4-pgw29z\\scripts\\main.py' --task-id task-mshdxwv4-pgw29z --step-id code-1 --step-param-b64 'eyJhcmctMSI6IjxzdHJpbmc-In0='\n-------------\n**step-param 入参说明**:\n\n### 节点Code-1\n\n| 参数 | 类型 | 必填 | 描述 |\n| --- | --- | --- | --- |\n| arg-1 | string | 是 | 参数描述 |\n-------------",
+      "prompt_output": "请按我要求的执行命令一步步执行\n\n---\ntask-id: task-mshdxwv4-pgw29z\n\n-------------\n## 下一个step待执行命令:\n\n& 'C:\\Python314\\python.exe' 'C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-mshdxwv4-pgw29z\\scripts\\main.py' --task-id task-mshdxwv4-pgw29z --step-id code-1 --step-param-b64 'eyJhcmctMSI6IjxzdHJpbmc-In0='\n-------------\n**step-param 入参说明**:\n\n### 节点Code-1\n\n| 参数 | 类型 | 必填 | 描述 |\n| --- | --- | --- | --- |\n| arg-1 | string | 是 | 参数描述 |\n-------------",
+      "status": "success",
+      "duration_ms": 2.2592999739572406
+    }
+  },
+  "variables": {
+    "task-id": {
+      "type": "string",
+      "value": "task-mshdxwv4-pgw29z",
+      "owner": "system"
+    }
+  }
+}

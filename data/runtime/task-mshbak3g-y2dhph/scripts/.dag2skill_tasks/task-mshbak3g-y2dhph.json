@@ -1,0 +1,16 @@
+{
+  "task-id": "task-mshbak3g-y2dhph",
+  "created-at": 1786008415.420238,
+  "updated-at": 1786008415.420238,
+  "variables": {
+    "task-id": "task-mshbak3g-y2dhph",
+    "numbers": [],
+    "threshold": 1
+  },
+  "waiting-node": "llm-2",
+  "node-statuses": {
+    "s": "success",
+    "llm-2": "waiting"
+  },
+  "finished": false
+}

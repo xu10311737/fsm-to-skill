@@ -1,0 +1,20 @@
+{
+  "task-id": "task-mshedxjz-1cjkyj",
+  "created-at": 1786013614.809102,
+  "updated-at": 1786013762.745988,
+  "variables": {
+    "task-id": "task-mshedxjz-1cjkyj",
+    "arg-1": "hello",
+    "result": "hello"
+  },
+  "waiting-node": null,
+  "node-statuses": {
+    "start-1": "success",
+    "llm-1": "success",
+    "code-1": "success",
+    "llm-2": "success",
+    "end-1": "success"
+  },
+  "finished": true,
+  "last-prompt": null
+}

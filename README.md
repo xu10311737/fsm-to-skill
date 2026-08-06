@@ -1,6 +1,7 @@
 # fsm to skill · DAG 工作流编排到 Skill 导出引擎
 
 > 让大模型回归“推理”本职，将“流程控制”交还给经典而严谨的有限状态机（FSM）。
+
 > 基于状态机（FSM）的完全本地化、轻量级 的SKILL编排与生成工具。
 
 
@@ -10,7 +11,9 @@
 
 ## 界面预览
 
-![界面预览](images/screenshot.png)
+![界面预览](images/screenshot-build.png)
+
+![界面预览](images/screenshot-run.png)
 
 ---
 

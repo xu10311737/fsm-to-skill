@@ -1,0 +1,179 @@
+{
+  "version": "1.0",
+  "main_thread": "scripts/main.py",
+  "workflow_id": "agent-complex",
+  "entries": [
+    {
+      "entry_id": "prep",
+      "step_id": "prep",
+      "node_id": "prep",
+      "node_name": "prep",
+      "direction": "agent_to_code",
+      "input_schema": [
+        {
+          "name": "numbers",
+          "description": "",
+          "type": "list",
+          "required": true
+        },
+        {
+          "name": "threshold",
+          "description": "",
+          "type": "int",
+          "required": true
+        }
+      ],
+      "command_template": "python C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-msh7p674-ekdxl7\\scripts\\main.py \\\n--task_id <task-id> \\\n--step-id prep \\\n--step-param <下文中实际节点入参>"
+    }
+  ],
+  "exits": [
+    {
+      "exit_id": "llm-1",
+      "step_id": "llm-1",
+      "node_id": "llm-1",
+      "node_name": "Prompt-1",
+      "direction": "prompt_to_agent",
+      "prompt_template": "任务结束",
+      "next_code_entries": []
+    },
+    {
+      "exit_id": "llm-2",
+      "step_id": "llm-2",
+      "node_id": "llm-2",
+      "node_name": "Prompt-2",
+      "direction": "prompt_to_agent",
+      "prompt_template": "现在请进行一个demo验证，你需要随着我的指令执行，let us step by step",
+      "next_code_entries": [
+        {
+          "step_id": "prep",
+          "node_name": "prep",
+          "input_schema": [
+            {
+              "name": "numbers",
+              "description": "",
+              "type": "list",
+              "required": true
+            },
+            {
+              "name": "threshold",
+              "description": "",
+              "type": "int",
+              "required": true
+            }
+          ],
+          "command_template": "python C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-msh7p674-ekdxl7\\scripts\\main.py \\\n--task_id <task-id> \\\n--step-id prep \\\n--step-param <下文中实际节点入参>"
+        }
+      ]
+    }
+  ],
+  "code_entries": [
+    {
+      "entry_id": "prep",
+      "step_id": "prep",
+      "node_id": "prep",
+      "node_name": "prep",
+      "direction": "agent_to_code",
+      "input_schema": [
+        {
+          "name": "numbers",
+          "description": "",
+          "type": "list",
+          "required": true
+        },
+        {
+          "name": "threshold",
+          "description": "",
+          "type": "int",
+          "required": true
+        }
+      ],
+      "command_template": "python C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-msh7p674-ekdxl7\\scripts\\main.py \\\n--task_id <task-id> \\\n--step-id prep \\\n--step-param <下文中实际节点入参>"
+    }
+  ],
+  "prompt_exits": [
+    {
+      "exit_id": "llm-1",
+      "step_id": "llm-1",
+      "node_id": "llm-1",
+      "node_name": "Prompt-1",
+      "direction": "prompt_to_agent",
+      "prompt_template": "任务结束",
+      "next_code_entries": []
+    },
+    {
+      "exit_id": "llm-2",
+      "step_id": "llm-2",
+      "node_id": "llm-2",
+      "node_name": "Prompt-2",
+      "direction": "prompt_to_agent",
+      "prompt_template": "现在请进行一个demo验证，你需要随着我的指令执行，let us step by step",
+      "next_code_entries": [
+        {
+          "step_id": "prep",
+          "node_name": "prep",
+          "input_schema": [
+            {
+              "name": "numbers",
+              "description": "",
+              "type": "list",
+              "required": true
+            },
+            {
+              "name": "threshold",
+              "description": "",
+              "type": "int",
+              "required": true
+            }
+          ],
+          "command_template": "python C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-msh7p674-ekdxl7\\scripts\\main.py \\\n--task_id <task-id> \\\n--step-id prep \\\n--step-param <下文中实际节点入参>"
+        }
+      ]
+    }
+  ],
+  "routes": [
+    {
+      "source": "prep",
+      "source_name": "prep",
+      "target": "outer",
+      "target_name": "outer",
+      "handle": "out"
+    },
+    {
+      "source": "outer",
+      "source_name": "outer",
+      "target": "llm-1",
+      "target_name": "Prompt-1",
+      "handle": "out"
+    },
+    {
+      "source": "llm-1",
+      "source_name": "Prompt-1",
+      "target": "e",
+      "target_name": "end",
+      "handle": "out"
+    },
+    {
+      "source": "s",
+      "source_name": "start",
+      "target": "llm-2",
+      "target_name": "Prompt-2",
+      "handle": "out"
+    },
+    {
+      "source": "llm-2",
+      "source_name": "Prompt-2",
+      "target": "prep",
+      "target_name": "prep",
+      "handle": "out"
+    }
+  ],
+  "agent_envelope": {
+    "agent_command": "python C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-msh7p674-ekdxl7\\scripts\\main.py \\\n--task_id <task-id> \\\n--step-id <code_node_id> \\\n--step-param <下文中实际节点入参>",
+    "task-id": "<task-id>",
+    "step-id": "<actual_code_node_id>",
+    "step-param": {
+      "<arg>": "<value>"
+    },
+    "step-param-format": "JSON string keyed by Code input_schema.name"
+  }
+}

@@ -372,7 +372,7 @@ def _render_prompt(wf: dict[str, Any], node: dict[str, Any],
         return prompt
     context = _command_context(wf, node)
     return prompt.rstrip() + "\n\n" + _format_next_code_entries(
-        entries, variables.get(TASK_ID_VAR, ""), context)
+        entries, variables.get(TASK_ID_VAR, ""), context, variables)
 
 
 def _command_context(wf: dict[str, Any],
@@ -438,8 +438,11 @@ def _next_code_entries(wf: dict[str, Any], prompt_id: str | None
 
 def _format_next_code_entries(entries: list[dict[str, Any]],
                               task_id: str,
-                              command_context: dict[str, Any] | None) -> str:
+                              command_context: dict[str, Any] | None,
+                              variables: dict[str, Any] | None = None) -> str:
+    variables = variables or {}
     first = entries[0]
+    # 参数值由 agent 基于上下文推理，命令中保留 <type> 占位符，不硬编码写死。
     command = format_step_command(
         command_context,
         task_id or "<task-id>",
@@ -458,8 +461,32 @@ def _format_next_code_entries(entries: list[dict[str, Any]],
         "**step-param 入参说明**:",
         "",
         _format_schema_md(entries),
-        "-------------",
+        "",
+        "**执行说明**:",
+        "1. 当前主机是 Windows PowerShell，禁止 bash 语法（&&、||、ls -la、rg、test -f 等）。",
+        "2. 命令中的 `--step-param-b64 '<...>'` 是 JSON 的 base64，请先用下面命令解码查看占位符：",
+        "   python -c \"import base64,json; print(json.dumps(json.loads(base64.urlsafe_b64decode('<...>')), ensure_ascii=False))\"",
+        "3. 用真实推理出的参数替换 JSON 里的 `<占位符>`，再重新 base64 编码提交，例如：",
+        "   python -c \"import base64,json; print(base64.urlsafe_b64encode(json.dumps({'arg-1':'真实值'}, ensure_ascii=False, separators=(',',':')).encode('utf-8')).decode('ascii'))\"",
+        "4. 严禁原样提交含 `<占位符>` 的命令，那会导致脚本拿到占位符而非真实值。",
     ]
+    # 附上上下文里已有的参考值，帮助 agent 推理出真实参数（仅作参考，不写死）。
+    refs = []
+    for spec in first["input_schema"]:
+        name = spec["name"]
+        if variables.get(name) is not None:
+            v = variables[name]
+            if isinstance(v, (list, dict)):
+                v = json.dumps(v, ensure_ascii=False)
+            refs.append(f"  {name} = {v}")
+    if refs:
+        lines.extend([
+            "",
+            "**当前上下文可参考值（请基于这些推理出真实参数，替换命令中的 <占位符>，不得原样提交占位符）**:",
+            "",
+            *refs,
+        ])
+    lines.append("-------------")
     return "\n".join(lines)
 
 

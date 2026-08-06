@@ -161,7 +161,7 @@ class FakeLLMService:
         # failures: 调用次数 -> 异常（前 N 次失败）
         self.failures = list(failures or [])
 
-    async def complete(self, prompt: str, node_id: str = ""):
+    async def complete(self, prompt: str, node_id: str = "", **kwargs):
         self.calls.append(prompt)
         if self.failures:
             raise self.failures.pop(0)
@@ -171,12 +171,36 @@ class FakeLLMService:
             "usage": self.usage,
         }
 
-    async def stream(self, prompt: str, node_id: str = ""):
+    async def stream(self, prompt: str, node_id: str = "", **kwargs):
         self.calls.append(prompt)
         if self.failures:
             raise self.failures.pop(0)
         for ch in self.reply:
             yield ch
+
+    async def complete_events(self, prompt: str, messages=None, **kwargs):
+        """模拟 Agent 流式：产出单轮模型回合与最终结果。"""
+        self.calls.append(prompt)
+        if self.failures:
+            raise self.failures.pop(0)
+        model_item = {
+            "type": "model",
+            "turn": 1,
+            "content": self.reply,
+            "thinking": self.thinking,
+            "tool_calls": [],
+            "usage": self.usage,
+        }
+        yield {"event": "agent_model", "item": model_item}
+        msgs = list(messages or []) + [{"role": "user", "content": prompt}]
+        yield {"event": "agent_final", "response": {
+            "content": self.reply,
+            "thinking": self.thinking,
+            "usage": self.usage,
+            "tool_results": [],
+            "trace": [model_item],
+            "messages": msgs,
+        }}
 
 
 @pytest.fixture

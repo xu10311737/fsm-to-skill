@@ -8,7 +8,7 @@ import { api } from "./api.js?v=20260730-agent-debug";
 import { el, openModal, closeModal, toast } from "./ui.js";
 import { Canvas } from "./canvas.js";
 import { initPanels, renderPanel } from "./panels.js?v=20260804-loop-code-debug-2";
-import { initRun, syncRunPage } from "./run.js?v=20260802-terminal-fix";
+import { initRun, syncRunPage } from "./run.js?v=20260806-shell-fix-v3";
 import { saveWorkflowToFile } from "./persistence.js";
 
 let canvas = null;

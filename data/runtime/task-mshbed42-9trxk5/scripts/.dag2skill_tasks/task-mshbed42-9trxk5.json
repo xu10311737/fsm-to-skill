@@ -1,0 +1,21 @@
+{
+  "task-id": "task-mshbed42-9trxk5",
+  "created-at": 1786008592.677017,
+  "updated-at": 1786008744.424974,
+  "variables": {
+    "task-id": "task-mshbed42-9trxk5",
+    "numbers": [],
+    "threshold": 1,
+    "groups": []
+  },
+  "waiting-node": null,
+  "node-statuses": {
+    "s": "success",
+    "llm-2": "success",
+    "prep": "success",
+    "llm-1": "success",
+    "e": "success"
+  },
+  "finished": true,
+  "last-prompt": null
+}

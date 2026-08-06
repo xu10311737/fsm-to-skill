@@ -6,6 +6,7 @@ import { Canvas } from "./canvas.js";
 
 let runCanvas = null;
 let session = null;
+let agentAbort = null;
 let chatBox, inputsWrap, statsBox, detailBox, summaryLine;
 let userMessageInput;
 let tokenBuffers = {};
@@ -181,9 +182,14 @@ async function callDebugAgent(result) {
   if (!prompt || !taskId) return;
   addChat("system", "Prompt 已发送给大模型，等待 Agent 执行");
   updateSummaryLine({ running: true, agent: true });
+  // agent 调试阶段必须显式显示停止按钮（startRun 的 setRunning(true) 在 workflow
+  // 进入 waiting/结束后可能已失效，导致 btn-stop 一直隐藏、无法中止）。
+  setRunning(true);
+  agentAbort = new AbortController();
   try {
     const responses = [];
     const seenPrompts = new Set();
+    let messages = [];
     for (let round = 0; round < 20; round++) {
       const modelPrompt = agentPromptForRound(lastUserInput, prompt, round);
       result.agent_prompt = modelPrompt;
@@ -192,7 +198,11 @@ async function callDebugAgent(result) {
         break;
       }
       seenPrompts.add(modelPrompt);
-      const resp = await streamDebugAgent(taskId, modelPrompt);
+      const resp = await streamDebugAgent(taskId, modelPrompt, messages,
+        agentAbort.signal);
+      if (Array.isArray(resp.messages) && resp.messages.length) {
+        messages = resp.messages;
+      }
       responses.push(resp);
       state.lastResult.agent_response = resp;
       state.lastResult.agent_responses = responses;
@@ -227,8 +237,12 @@ async function callDebugAgent(result) {
     renderStats(state.lastResult);
     updateSummaryLine(state.lastResult);
   } catch (err) {
-    addChat("system", `大模型调用失败：${err.message}`, "error");
-    toast(err.message, "error");
+    if (err.name !== "AbortError") {
+      addChat("system", `大模型调用失败：${err.message}`, "error");
+      toast(err.message, "error");
+    }
+  } finally {
+    agentAbort = null;
   }
 }
 
@@ -269,14 +283,16 @@ function agentPromptForRound(userInput, prompt, round) {
   return round === 0 ? composeFirstAgentPrompt(userInput, text) : text;
 }
 
-async function postDebugAgent(taskId, prompt) {
+async function postDebugAgent(taskId, prompt, messages, signal) {
   if (api && typeof api.debugAgent === "function") {
-    return api.debugAgent(taskId, prompt);
+    return api.debugAgent(taskId, prompt, messages);
   }
   const resp = await fetch("/api/debug/agent", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ "task-id": taskId, task_id: taskId, prompt }),
+    body: JSON.stringify(
+      { "task-id": taskId, task_id: taskId, prompt, messages }),
+    signal,
   });
   const text = await resp.text();
   let data = null;
@@ -294,15 +310,17 @@ async function postDebugAgent(taskId, prompt) {
   return data;
 }
 
-async function streamDebugAgent(taskId, prompt) {
+async function streamDebugAgent(taskId, prompt, messages, signal) {
   const completedDuration = agentDurationMs(state.lastResult || {});
   const resp = await fetch("/api/debug/agent/stream", {
     method: "POST",
     headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ "task-id": taskId, task_id: taskId, prompt }),
+    body: JSON.stringify(
+      { "task-id": taskId, task_id: taskId, prompt, messages }),
+    signal,
   });
   if (!resp.ok || !resp.body) {
-    return postDebugAgent(taskId, prompt);
+    return postDebugAgent(taskId, prompt, messages, signal);
   }
   const reader = resp.body.getReader();
   const decoder = new TextDecoder();
@@ -397,6 +415,7 @@ function resetRunView() {
 
 function stopRun() {
   if (session) session.abort();
+  if (agentAbort) agentAbort.abort();
 }
 
 function setRunning(running) {
@@ -444,6 +463,13 @@ function appendStreamingToken(evt) {
 function finishRun(evt) {
   const result = evt.result;
   if (result) {
+    const prev = state.lastResult;
+    // workflow_finished 的结果不含 agent 响应，保留上一份 agent_responses/response，
+    // 避免覆盖后缓存命中 token 等 usage 统计丢失。
+    if (!result.agent_response && !result.agent_responses) {
+      if (prev && prev.agent_responses) result.agent_responses = prev.agent_responses;
+      else if (prev && prev.agent_response) result.agent_response = prev.agent_response;
+    }
     state.lastResult = result;
     for (const [nid, rec] of Object.entries(result.node_records || {})) {
       state.nodeStatuses[nid] = rec.status;
@@ -548,6 +574,15 @@ function renderConversation(result) {
   if (result.status === "waiting" && result.waiting_prompt && !waitingPromptShown) {
     addChat("prompt", composeFirstAgentPrompt(userMessage, result.waiting_prompt), null,
       `脚本输出的 Prompt (${result.waiting_node || "等待节点"})`);
+  }
+  // 重建对话时补渲染 agent 调试阶段的 trace（思考/工具调用/回复）。
+  // 否则 workflow_finished 走 renderConversation 清空 chatBox 后，
+  // 只剩 eventLog 有思考内容，对话里不显示。
+  const agentResponses = Array.isArray(result.agent_responses) && result.agent_responses.length
+    ? result.agent_responses
+    : (result.agent_response ? [result.agent_response] : []);
+  for (const resp of agentResponses) {
+    if (resp && (resp.trace || resp.thinking)) renderAgentTrace(resp);
   }
   if (!chatBox.children.length) addChat("system", "暂无调试内容");
 }
@@ -679,12 +714,19 @@ function renderAgentTrace(resp) {
   for (const item of trace) {
     if (item.type === "model") {
       const title = `模型回合 ${item.turn || ""}`.trim();
-      if (item.thinking) {
-        addChat("thinking", item.thinking, null, `${title} · 思考`);
-        appendAgentLog("模型思考", item.thinking);
+      const thinking = (item.thinking || "").trim();
+      const content = (item.content || "").trim();
+      if (thinking) {
+        addChat("thinking", thinking, null, `${title} · 思考`);
+        appendAgentLog("模型思考", thinking);
+      } else if (content) {
+        // 部分模型 reasoning_content 为空，推理文本在 content 里，同样作为
+        // 思考渲染到对话区，保证"大模型思考"可见。
+        addChat("thinking", content, null, `${title} · 思考`);
+        appendAgentLog("模型思考", content);
       }
-      if (item.content) {
-        appendAgentLog(title, item.content);
+      if (content) {
+        appendAgentLog(title, content);
       }
       const calls = item.tool_calls || [];
       if (calls.length) {

@@ -106,12 +106,14 @@ class LLMClient:
     # ------------------------------------------------------------------
     async def complete(self, prompt: str, provider: str | None = None,
                        model: str | None = None,
-                       node_id: str | None = None) -> dict[str, Any]:
+                       node_id: str | None = None,
+                       messages: list[dict[str, Any]] | None = None
+                       ) -> dict[str, Any]:
         """返回 {"content", "thinking", "usage"}。"""
         name, cfg = self._provider_cfg(provider)
         if self._shell_tool_enabled() and not self._is_anthropic(name):
-            return await self._complete_with_tools(name, cfg, self._model(model),
-                                                   prompt)
+            return await self._complete_with_tools(
+                name, cfg, self._model(model), prompt, messages=messages)
         url, headers, body = self._build_request(
             name, cfg, self._model(model), prompt, stream=False)
         resp = await self._request_with_retry(url, headers, body)
@@ -119,12 +121,20 @@ class LLMClient:
 
     async def complete_events(
             self, prompt: str, provider: str | None = None,
-            model: str | None = None) -> AsyncIterator[dict[str, Any]]:
-        """逐步产出模型回合、shell 调用和最终结果。"""
+            model: str | None = None,
+            messages: list[dict[str, Any]] | None = None
+    ) -> AsyncIterator[dict[str, Any]]:
+        """逐步产出模型回合、shell 调用和最终结果。
+
+        ``messages`` 为可选的持续会话历史：传入时，会把 ``prompt`` 作为
+        新的 user 消息追加到历史末尾，从而跨 LLM 节点共享上下文（路径 A1）。
+        ``agent_final.response.messages`` 会返回更新后的完整会话，供前端
+        累积传递到下一个节点。
+        """
         name, cfg = self._provider_cfg(provider)
         if self._shell_tool_enabled() and not self._is_anthropic(name):
             async for item in self._complete_with_tools_events(
-                    name, cfg, self._model(model), prompt):
+                    name, cfg, self._model(model), prompt, messages):
                 yield item
             return
         resp = await self.complete(prompt, provider=provider, model=model)
@@ -140,11 +150,16 @@ class LLMClient:
         yield {"event": "agent_final", "response": {
             **resp,
             "trace": [model_item],
+            "messages": (list(messages or [])
+                         + [{"role": "user", "content": prompt}]),
         }}
 
     async def _complete_with_tools(self, name: str, cfg: dict, model: str,
-                                   prompt: str) -> dict[str, Any]:
-        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+                                   prompt: str,
+                                   messages: list[dict[str, Any]] | None = None
+                                   ) -> dict[str, Any]:
+        messages = list(messages or [])
+        messages.append({"role": "user", "content": prompt})
         total_usage: dict[str, int] = {}
         thinking_parts: list[str] = []
         tool_results: list[dict[str, Any]] = []
@@ -206,8 +221,11 @@ class LLMClient:
 
     async def _complete_with_tools_events(
             self, name: str, cfg: dict, model: str,
-            prompt: str) -> AsyncIterator[dict[str, Any]]:
-        messages: list[dict[str, Any]] = [{"role": "user", "content": prompt}]
+            prompt: str,
+            messages: list[dict[str, Any]] | None = None
+    ) -> AsyncIterator[dict[str, Any]]:
+        messages = list(messages or [])
+        messages.append({"role": "user", "content": prompt})
         total_usage: dict[str, int] = {}
         thinking_parts: list[str] = []
         tool_results: list[dict[str, Any]] = []
@@ -244,6 +262,7 @@ class LLMClient:
                     "usage": total_usage or usage,
                     "tool_results": tool_results,
                     "trace": trace,
+                    "messages": messages,
                 }}
                 return
             messages.append({
@@ -312,6 +331,10 @@ class LLMClient:
             usage = {
                 "prompt_tokens": usage_raw.get("input_tokens"),
                 "completion_tokens": usage_raw.get("output_tokens"),
+                "cache_creation_input_tokens": usage_raw.get(
+                    "cache_creation_input_tokens"),
+                "cache_read_input_tokens": usage_raw.get(
+                    "cache_read_input_tokens"),
             } if usage_raw else None
             return {"content": text, "thinking": None, "usage": usage}
         choice = (data.get("choices") or [{}])[0]
@@ -409,9 +432,19 @@ class LLMClient:
                 "function": {
                     "name": "shell",
                     "description": (
-                        "Execute a local bash/shell command for the current DAG "
-                        "Skill task. Use this to call python main.py with the "
-                        "provided --task-id, --step-id and --step-param."
+                        "Execute a local shell command for the current DAG Skill "
+                        "task on the CURRENT HOST. "
+                        "IMPORTANT: The host is Windows PowerShell (not bash). "
+                        "Do NOT use bash syntax: no '&&', no '||', no 'ls -la', "
+                        "no 'test -f', no 'rg', no '&& echo'. Use PowerShell "
+                        "cmdlets: 'Get-ChildItem', 'Test-Path', 'Get-Content', "
+                        "separate commands with ';' instead of '&&'. "
+                        "Use the exact command template provided in the prompt "
+                        "(it already uses --step-param-b64 '<base64>' so JSON "
+                        "needs no quoting). Do NOT hand-write --step-param with "
+                        "a raw JSON string, it will be mangled by PowerShell. "
+                        "Replace the <placeholders> in the template with real "
+                        "values, re-base64 the JSON if needed, then run it."
                     ),
                     "parameters": {
                         "type": "object",
@@ -544,8 +577,8 @@ class LLMClient:
                 timeout=timeout,
                 env={**os.environ, "PYTHONIOENCODING": "utf-8"},
             )
-            stdout = proc.stdout.decode("utf-8", errors="replace")
-            stderr = proc.stderr.decode("utf-8", errors="replace")
+            stdout = _decode_shell_bytes(proc.stdout)
+            stderr = _decode_shell_bytes(proc.stderr)
             return {
                 "ok": proc.returncode == 0,
                 "exit_code": proc.returncode,
@@ -558,12 +591,8 @@ class LLMClient:
                 "ok": False,
                 "exit_code": None,
                 "command": command,
-                "stdout": _limit_tool_text(
-                    (exc.stdout or b"").decode("utf-8", errors="replace")
-                    if isinstance(exc.stdout, bytes) else (exc.stdout or "")),
-                "stderr": _limit_tool_text(
-                    (exc.stderr or b"").decode("utf-8", errors="replace")
-                    if isinstance(exc.stderr, bytes) else (exc.stderr or "")),
+                "stdout": _limit_tool_text(_decode_shell_bytes(exc.stdout)),
+                "stderr": _limit_tool_text(_decode_shell_bytes(exc.stderr)),
                 "error": f"shell 命令超过 {timeout:g} 秒被终止",
             }
         except OSError as exc:
@@ -599,6 +628,21 @@ def _limit_tool_text(value: str, limit: int = 12000) -> str:
     if len(value) <= limit:
         return value
     return value[:limit] + f"\n... truncated {len(value) - limit} chars"
+
+
+def _decode_shell_bytes(data: bytes | None) -> str:
+    """解码 shell 输出，优先 UTF-8，失败时回退到 GBK（Windows 常见乱码）。"""
+    if not data:
+        return ""
+    if isinstance(data, str):
+        return data
+    try:
+        return data.decode("utf-8")
+    except UnicodeDecodeError:
+        try:
+            return data.decode("gbk", errors="replace")
+        except (UnicodeDecodeError, LookupError):
+            return data.decode("utf-8", errors="replace")
 
 
 def _resolve_shell(shell: str) -> str:

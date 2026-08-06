@@ -1,0 +1,16 @@
+{
+  "task-id": "task-mshb5glr-zilobl",
+  "created-at": 1786008182.951592,
+  "updated-at": 1786008182.951592,
+  "variables": {
+    "task-id": "task-mshb5glr-zilobl",
+    "numbers": [],
+    "threshold": 1
+  },
+  "waiting-node": "llm-2",
+  "node-statuses": {
+    "s": "success",
+    "llm-2": "waiting"
+  },
+  "finished": false
+}
