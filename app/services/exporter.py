@@ -267,6 +267,15 @@ def _write_scripts(wf: dict, target: Path,
                                encoding="utf-8")
 
 
+def _safe_timeout(value: Any, default: int) -> int:
+    """Coerce a timeout value to a positive int, falling back to ``default``."""
+    try:
+        n = int(float(value))
+    except (TypeError, ValueError):
+        return default
+    return n if n > 0 else default
+
+
 def _iter_nodes(graph: dict) -> list[dict]:
     out: list[dict] = []
     for node in graph.get("nodes", []) or []:
@@ -1371,10 +1380,13 @@ def _cli() -> int:
 if __name__ == "__main__":
     raise SystemExit(_cli())
 '''
+    ctx = command_context or {}
+    idle = ctx.get("idle_timeout") or 600
+    runtime = ctx.get("max_task_runtime") or 3600
     return (
         template
         .replace("__WORKFLOW__", repr(wf))
-        .replace("__COMMAND_CONTEXT__", repr(command_context or {}))
-        .replace("__IDLE_TIMEOUT__", "600")
-        .replace("__MAX_TASK_RUNTIME__", "3600")
+        .replace("__COMMAND_CONTEXT__", repr(ctx))
+        .replace("__IDLE_TIMEOUT__", str(_safe_timeout(idle, 600)))
+        .replace("__MAX_TASK_RUNTIME__", str(_safe_timeout(runtime, 3600)))
     )

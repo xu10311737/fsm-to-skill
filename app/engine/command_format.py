@@ -11,13 +11,17 @@ from typing import Any
 
 
 def command_context_from_config(config: dict[str, Any] | None,
-                                main_path: str | Path) -> dict[str, str]:
+                                main_path: str | Path) -> dict[str, Any]:
     cfg = config or {}
     shell_cfg = cfg.get("shell_tool") or {}
     return {
         "python_path": str(cfg.get("python_path") or sys.executable or "python"),
         "shell": str(shell_cfg.get("shell") or "auto"),
         "main_path": str(main_path),
+        # 任务超时配置：随 command_context 注入导出的 main.py，
+        # 分别对应"单次等待 agent 输入的空闲超时"与"任务总运行时长上限"。
+        "idle_timeout": int(cfg.get("idle_timeout") or 600),
+        "max_task_runtime": int(cfg.get("max_task_runtime") or 3600),
     }
 
 
