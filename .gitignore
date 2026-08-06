@@ -37,8 +37,9 @@ Thumbs.db
 .pytest*/
 work/pytest_tmp/
 
-# ===== 本地运行/调试产物（保留 data/workflows/agent-complex.yaml 示例） =====
+# ===== 本地运行/调试产物 =====
 data/workflows/wf-*
+data/workflows/agent-complex.yaml
 
 # ===== trans-fsm-skill 生成的技能包 =====
 trans-fsm-skill/outputs/
