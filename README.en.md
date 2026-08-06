@@ -64,7 +64,7 @@ Pain points fsm to skill solves:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/<your-name>/fsm-to-skill.git
+git clone https://github.com/xu10311737/fms-to-skill.git
 cd fsm-to-skill
 
 # 2. Create a virtual environment (optional but recommended)
@@ -186,10 +186,10 @@ fsm-to-skill/
 │   ├── docs.html           # documentation
 │   └── js/ css/
 ├── data/
-│   ├── config.yaml         # local config (incl. LLM api_key, gitignored)
-│   └── workflows/          # sample workflows
+│   ├── config.yaml         # local config
+│   └── workflows/          #  workflows
 ├── trans-fsm-skill/        # prebuilt skills: convert an existing SKILL into an fsm skill
-├── work/                   # runtime artifacts / debug scripts (gitignored)
+├── work/                   # runtime artifacts / debug scripts 
 ├── main.py                 # FastAPI entry
 ├── run.py                  # launcher
 ├── requirements.txt        # runtime deps

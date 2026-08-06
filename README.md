@@ -67,7 +67,7 @@ fsm to skill解决的痛点:
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/<your-name>/fsm-to-skill.git
+git clone https://github.com/xu10311737/fms-to-skill.git
 cd fsm-to-skill
 
 # 2. 创建虚拟环境（可选但推荐）
@@ -189,10 +189,10 @@ fsm-to-skill/
 │   ├── docs.html           # 使用文档
 │   └── js/ css/
 ├── data/
-│   ├── config.yaml         # 本地配置（含 LLM api_key，已 gitignore）
-│   └── workflows/          # 示例工作流
+│   ├── config.yaml         # 本地配置
+│   └── workflows/          # 本地工作流
 ├── trans-fsm-skill/        # 预制skill,将已经编写好的skill转成fsm skill
-├── work/                   # 运行产物/调试脚本（已 gitignore）
+├── work/                   # 运行产物/调试脚本
 ├── main.py                 # FastAPI 入口
 ├── run.py                  # 启动脚本
 ├── requirements.txt        # 运行依赖
