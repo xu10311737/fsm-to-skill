@@ -77,13 +77,13 @@
 <ul>
   <li>变量按 DAG 上游路径传导，节点只能引用自身上游可达节点产出的变量；IF / ELSE 分支未经过的变量不会被视为当前节点可用。</li>
   <li>同名变量只能由一个节点产出一次；系统默认提供全局变量 <code>task-id</code>，初始变量不能与其重名。</li>
-  <li>变量名由字母开头，可含字母、数字、下划线和连字符（保留字如 <code>result</code> 等不可作为输出名，系统自动产出的 <code>&lt;id&gt;-output</code>、<code>task-id</code>、<code>index</code>、<code>item</code>、<code>len</code>、<code>total</code> 除外）。</li>
+  <li>变量名由字母开头，可含字母、数字、下划线和连字符。保留字处理：<code>result</code> 是唯一允许作为用户输出名的系统保留字（Code 节点契约 <code>main() -&gt; {"result": ...}</code>）；<code>task-id</code> 是唯一全局系统变量，<code>index / item / len / total</code> 是 For 循环局部变量，这五者均不可被用户声明为输出名。</li>
   <li>模板引用带连字符的变量（如 <code>for-1-output</code>）时可直接书写 <code>{{ for-1-output }}</code>，系统自动适配。</li>
   <li>类型检查宽容 <code>null</code>：值为 None 时视为通过。</li>
 </ul>
 
 <h2>五、校验</h2>
-<p>工具栏「校验」按钮实时显示错误 / 警告数。导出 SKILL 前必须通过全部 Error 级校验（无环、单开始、变量可追溯、类型匹配、无嵌套 For 等 19 项）。点击校验按钮打开报告，可一键定位问题节点。</p>
+<p>工具栏「校验」按钮实时显示错误 / 警告数。导出 SKILL 前必须通过全部 Error 级校验（无环、单开始、变量可追溯、类型匹配、无嵌套 For 等 29 项）。点击校验按钮打开报告，可一键定位问题节点。错误码涵盖：结构完整性（<code>NO_START / MULTIPLE_STARTS / NO_END / START_HAS_INPUT / END_HAS_OUTPUT / DUPLICATE_NODE_ID / DUPLICATE_NODE_NAME / CYCLE / UNREACHABLE_NODE</code>）、IF/分支（<code>IF_BRANCH_UNCONNECTED / IF_BRANCH_MULTIPLE_TARGETS / ERROR_BRANCH_TARGET_NOT_PROMPT</code>）、变量系统（<code>UNDEFINED_VARIABLE / DUPLICATE_VARIABLE / INVALID_VAR_NAME / INVALID_PARAM_NAME / DUPLICATE_INPUT_PARAM / INVALID_VAR_TYPE / INVALID_PARAM_REQUIRED / TYPE_MISMATCH</code>）、节点配置（<code>EMPTY_PROMPT / EMPTY_CODE / CODE_SYNTAX / NO_MAIN_FUNC / MAIN_PARAMS_MISMATCH</code>）、循环荟集（<code>FOR_INPUT_NOT_LIST / NESTED_FOR / AGGREGATE_INPUT_REQUIRED / AGGREGATE_INPUT_NOT_DIRECT</code>）。</p>
 
 <h2>六、运行与调试</h2>
 <ul>
@@ -108,33 +108,50 @@
 <p><code>scripts/main.py</code> 是导出 Skill 的总状态机线程；每个 Code 节点是 Agent 输入进入 DAG 的独立入口，每个 Prompt 节点是 DAG 输出返回 Agent 的出口。导出时会生成 <code>agent_interface.json</code> 用于标识路由：</p>
 <pre><code>{
   "main_thread": "scripts/main.py",
+  "workflow_id": "&lt;workflow_id&gt;",
   "entries": [
     {
       "entry_id": "code-1",
-      "node_id": "code-1",
+      "step_id": "code-1",
+      "node_name": "节点名称",
       "direction": "agent_to_code",
       "input_schema": [
         {"name": "arg-1", "description": "输入参数", "type": "string", "required": true}
       ],
-      "return_keys": ["result", "length"]
+      "command_template": "&amp; 'C:\\Python314\\python.exe' '...\\scripts\\main.py' --task-id &lt;task-id&gt; --step-id code-1 --step-param-b64 '&lt;base64&gt;'"
     }
   ],
   "exits": [
     {
       "exit_id": "llm-1",
-      "node_id": "llm-1",
+      "step_id": "llm-1",
+      "node_name": "Prompt 节点名称",
       "direction": "prompt_to_agent",
-      "next_code_entries": []
+      "prompt_template": "...",
+      "next_code_entries": [
+        {
+          "entry_id": "code-2",
+          "step_id": "code-2",
+          "node_name": "节点名称",
+          "input_schema": [...],
+          "command_template": "..."
+        }
+      ]
     }
   ],
+  "routes": [
+    {"source": "code-1", "source_name": "节点名称", "target": "llm-1", "target_name": "Prompt 节点名称", "handle": "out"}
+  ],
+  "code_entries": [...],
+  "prompt_exits": [...],
   "agent_envelope": {
-    "agent_command": "python main.py --task-id &lt;task-id&gt; --step-id &lt;code_node_id&gt; --step-param '&lt;json_string&gt;'",
+    "agent_command": "&amp; 'C:\\Python314\\python.exe' '...\\scripts\\main.py' --task-id &lt;task-id&gt; --step-id &lt;code_node_id&gt; --step-param-b64 '&lt;base64&gt;'",
     "task-id": "&lt;task-id&gt;",
     "step-id": "&lt;actual_code_node_id&gt;",
     "step-param": {"arg-1": "value"}
   }
 }</code></pre>
-<p>Agent 调用时执行 <code>python main.py --task-id task-001 --step-id code-1 --step-param '{"arg-1":"hello"}'</code>，用 <code>--task-id</code> 标识同一次任务、用 <code>--step-id</code> 标识本次输入要进入哪个 Code 节点；状态机继续执行 DAG，直到遇到 Prompt 出口并把渲染后的字符串返回给 Agent。在线调试会使用当前 Python 解释器生成可执行命令；导出 Skill 后可按目标系统替换为 <code>python3</code>。正常 Prompt 末尾会动态附加 task-id、下一步待执行命令与入参说明；Code error 分支产生的 Prompt 不附加下一步 schema。</p>
+<p>Agent 调用时执行 <code>python main.py --task-id task-001 --step-id code-1 --step-param-b64 '&lt;base64&gt;'</code>，用 <code>--task-id</code> 标识同一次任务、用 <code>--step-id</code> 标识本次输入要进入哪个 Code 节点；节点入参以 base64 编码经 <code>--step-param-b64</code> 传入，避免各 shell 对内层引号转义不一致的问题。状态机继续执行 DAG，直到遇到 Prompt 出口并把渲染后的字符串返回给 Agent。在线调试会使用当前 Python 解释器生成可执行命令（Windows 下为 PowerShell 语法，例如 <code>&amp; 'C:\Python314\python.exe' '...'</code>）；导出 Skill 后可按目标系统替换为 <code>python3</code>。正常 Prompt 末尾会动态附加 task-id、下一步待执行命令与入参说明；Code error 分支产生的 Prompt 不附加下一步 schema。</p>
 
 <h2>九、配置说明</h2>
 <table>
@@ -145,8 +162,10 @@
   <tr><td>stream</td><td>是否流式输出</td></tr>
   <tr><td>python_path</td><td>Code 节点执行用的 Python 解释器路径，留空用当前环境</td></tr>
   <tr><td>idle_timeout / max_task_runtime</td><td>Agent 等待下一次 shell 调用的空闲超时与整个 task 生命周期上限</td></tr>
-  <tr><td>shell_tool</td><td>是否允许大模型调用本地 shell / bash / PowerShell 工具执行下一步 Code 命令</td></tr>
+  <tr><td>shell_tool</td><td>对象配置：<code>enabled</code>（是否允许大模型调用本地 shell 工具执行下一步 Code 命令）、<code>shell</code>（auto / bash / sh / powershell / pwsh）、<code>timeout_seconds</code>（单条命令超时）、<code>max_calls</code>（单次任务最多调用次数，默认 100）</td></tr>
 </table>
+<p><strong>Agent 工具集</strong>：除 <code>shell</code> 外，Agent 还暴露 <code>read_file</code> / <code>write_file</code> 工具用于读写工作区文件。这些均属于软约束——模型是否调用、调用多少取决于其自主判断。</p>
+<div class="warn">任务终止没有硬性机制：跑完 DAG 后是否返回、何时停止调用工具，完全依赖模型自觉（提示词约束）。系统仅以 <code>shell_tool.max_calls</code>、<code>idle_timeout</code>、<code>max_task_runtime</code> 做兜底，不会检测到"任务已结束"就强制中断模型。</div>
 <div class="warn">api_key 仅保存在本地配置文件中；界面回显为 ****** 时提交不会覆盖已保存的密钥。</div>
 <div class="tip">保存 / 打开工作流默认使用本机系统文件窗口并保存为 YAML；导出 SKILL 时选择导出父目录，系统会按工作流名称生成 Skill 文件夹。</div>
 </body>
