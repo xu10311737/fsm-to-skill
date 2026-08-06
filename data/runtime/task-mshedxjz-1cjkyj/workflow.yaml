@@ -39,7 +39,8 @@ nodes:
     x: 396
     y: 265
   config:
-    prompt: 请按我要求的执行命令一步步执行
+    prompt: 这是一个mock场景  现在你需要依次执行 执行下文中的shell命令，不需要关注其他细节（不要调用读写文件工具），直接调用shell即可，还有如果输出任务结束，立刻返回，并总结已运行的流程  “执行完该命令后，检查输出是否包含
+      任务结束！，如果包含则立即返回，不再做其他操作。”  必须严格遵循我的指令！
     agent_interface:
       role: agent_exit
       exit_id: llm-1
@@ -51,7 +52,7 @@ nodes:
     x: 939
     y: 226
   config:
-    prompt: 任务结束！
+    prompt: 任务结束！不要在继续推理和调用工具，立刻结束任务！
     agent_interface:
       role: agent_exit
       exit_id: llm-2

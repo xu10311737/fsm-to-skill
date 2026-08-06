@@ -1,0 +1,33 @@
+{
+  "id": "run-20260806111401-ba5e3a",
+  "workflow_id": null,
+  "wf_name": "未命名工作流",
+  "started_at": "2026-08-06T11:14:01.489682+00:00",
+  "status": "waiting",
+  "failed_node": null,
+  "end_node": null,
+  "waiting_node": "llm-1",
+  "waiting_prompt": "这是一个mock场景  现在你需要依次执行 执行下文中的shell命令，不需要关注其他细节（不要调用读写文件工具），直接调用shell即可，还有如果输出任务结束，立刻返回，并总结已运行的流程  “执行完该命令后，检查输出是否包含 任务结束！，如果包含则立即返回，不再做其他操作。”  必须严格遵循我的指令！\n\n---\ntask-id: task-mshedxjz-1cjkyj\n\n-------------\n## 下一个step待执行命令:\n\n& 'C:\\Python314\\python.exe' 'C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-mshedxjz-1cjkyj\\scripts\\main.py' --task-id task-mshedxjz-1cjkyj --step-id code-1 --step-param-b64 'eyJhcmctMSI6IjxzdHJpbmc-In0='\n-------------\n**step-param 入参说明**:\n\n### 节点Code-1\n\n| 参数 | 类型 | 必填 | 描述 |\n| --- | --- | --- | --- |\n| arg-1 | string | 是 | 参数描述 |\n-------------",
+  "llm_call_count": 0,
+  "task-id": "task-mshedxjz-1cjkyj",
+  "task_id": "task-mshedxjz-1cjkyj",
+  "node_records": {
+    "start-1": {
+      "status": "success",
+      "duration_ms": 0.02829998265951872
+    },
+    "llm-1": {
+      "prompt": "这是一个mock场景  现在你需要依次执行 执行下文中的shell命令，不需要关注其他细节（不要调用读写文件工具），直接调用shell即可，还有如果输出任务结束，立刻返回，并总结已运行的流程  “执行完该命令后，检查输出是否包含 任务结束！，如果包含则立即返回，不再做其他操作。”  必须严格遵循我的指令！\n\n---\ntask-id: task-mshedxjz-1cjkyj\n\n-------------\n## 下一个step待执行命令:\n\n& 'C:\\Python314\\python.exe' 'C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-mshedxjz-1cjkyj\\scripts\\main.py' --task-id task-mshedxjz-1cjkyj --step-id code-1 --step-param-b64 'eyJhcmctMSI6IjxzdHJpbmc-In0='\n-------------\n**step-param 入参说明**:\n\n### 节点Code-1\n\n| 参数 | 类型 | 必填 | 描述 |\n| --- | --- | --- | --- |\n| arg-1 | string | 是 | 参数描述 |\n-------------",
+      "prompt_output": "这是一个mock场景  现在你需要依次执行 执行下文中的shell命令，不需要关注其他细节（不要调用读写文件工具），直接调用shell即可，还有如果输出任务结束，立刻返回，并总结已运行的流程  “执行完该命令后，检查输出是否包含 任务结束！，如果包含则立即返回，不再做其他操作。”  必须严格遵循我的指令！\n\n---\ntask-id: task-mshedxjz-1cjkyj\n\n-------------\n## 下一个step待执行命令:\n\n& 'C:\\Python314\\python.exe' 'C:\\Users\\greatmeow\\Desktop\\backend\\data\\runtime\\task-mshedxjz-1cjkyj\\scripts\\main.py' --task-id task-mshedxjz-1cjkyj --step-id code-1 --step-param-b64 'eyJhcmctMSI6IjxzdHJpbmc-In0='\n-------------\n**step-param 入参说明**:\n\n### 节点Code-1\n\n| 参数 | 类型 | 必填 | 描述 |\n| --- | --- | --- | --- |\n| arg-1 | string | 是 | 参数描述 |\n-------------",
+      "status": "success",
+      "duration_ms": 0.7204000139608979
+    }
+  },
+  "variables": {
+    "task-id": {
+      "type": "string",
+      "value": "task-mshedxjz-1cjkyj",
+      "owner": "system"
+    }
+  }
+}
