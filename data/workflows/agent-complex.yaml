@@ -1,0 +1,219 @@
+id: agent-complex
+name: Agent复杂工作流
+nodes:
+- id: s
+  type: start
+  name: start
+  config:
+    inputs:
+    - name: numbers
+      type: list
+    - name: threshold
+      type: int
+  position:
+    x: 80
+    y: 200
+- id: prep
+  type: code
+  name: prep
+  config:
+    inputs:
+    - name: numbers
+      type: list
+    - name: threshold
+      type: int
+    outputs:
+    - name: groups
+      type: list
+    code: "def main(numbers, threshold):\n    groups = []\n    for i in range(0, len(numbers),\
+      \ 2):\n        groups.append(numbers[i:i+2])\n    return {'groups': groups}\n"
+  position:
+    x: 340
+    y: 200
+- id: outer
+  type: for
+  name: outer
+  config:
+    list_source: groups
+    collect: out
+    body:
+      nodes:
+      - id: calc
+        type: code
+        name: calc
+        config:
+          inputs:
+          - name: row
+            type: list
+            source: item
+          - name: threshold
+            type: int
+          outputs:
+          - name: row-sum
+            type: int
+          - name: decision
+            type: string
+          code: "def main(row, threshold):\n    total = sum(row)\n    return {'row-sum':\
+            \ total, 'decision': 'big' if total > threshold else 'small'}\n"
+        position:
+          x: 300
+          y: 420
+      - id: big
+        type: if
+        name: big
+        config:
+          variable: decision
+          operator: 是
+          value: small
+          value_type: constant
+        position:
+          x: 540
+          y: 420
+      - id: 'yes'
+        type: code
+        name: 'yes'
+        config:
+          inputs:
+          - name: d
+            type: string
+            source: decision
+          outputs:
+          - name: label
+            type: string
+          code: "def main(d):\n    return {'label': 'SMALL'}\n"
+        position:
+          x: 780
+          y: 420
+      - id: 'no'
+        type: code
+        name: 'no'
+        config:
+          inputs:
+          - name: d
+            type: string
+            source: decision
+          outputs:
+          - name: label
+            type: string
+          code: "def main(d):\n    return {'label': 'BIG'}\n"
+        position:
+          x: 1020
+          y: 420
+      - id: fmt
+        type: code
+        name: fmt
+        config:
+          inputs:
+          - name: row
+            type: list
+            source: item
+          - name: rs
+            type: int
+            source: row-sum
+          - name: decision
+            type: string
+          outputs:
+          - name: out
+            type: string
+          code: "def main(row, rs, decision):\n    return {'out': f\"{row}:{rs}:{decision}\"\
+            }\n"
+        position:
+          x: 1260
+          y: 420
+      edges:
+      - id: e-calc-big-out
+        source: calc
+        target: big
+        source_handle: out
+      - id: e-big-yes-if
+        source: big
+        target: 'yes'
+        source_handle: if
+      - id: e-big-no-else
+        source: big
+        target: 'no'
+        source_handle: else
+      - id: e-yes-fmt-out
+        source: 'yes'
+        target: fmt
+        source_handle: out
+      - id: e-no-fmt-out
+        source: 'no'
+        target: fmt
+        source_handle: out
+  position:
+    x: 600
+    y: 200
+- id: agg
+  type: aggregate
+  name: agg
+  config:
+    operation: join
+    output_type: string
+    inputs:
+    - name: outer-output
+      source: outer-output
+      type: list
+  position:
+    x: 860
+    y: 200
+- id: judge
+  type: llm
+  name: judge
+  config:
+    prompt: '以下是各组统计:
+
+      {{ outer-output }}
+
+      请给出结论。'
+  position:
+    x: 1120
+    y: 200
+- id: final
+  type: code
+  name: final
+  config:
+    inputs:
+    - name: conclusion
+      type: string
+      source: judge-conclusion
+    outputs:
+    - name: report
+      type: string
+    code: "def main(conclusion):\n    return {'report': '报告: ' + conclusion}\n"
+  position:
+    x: 1380
+    y: 200
+- id: e
+  type: end
+  name: end
+  config: {}
+  position:
+    x: 1640
+    y: 200
+edges:
+- id: e-s-prep-out
+  source: s
+  target: prep
+  source_handle: out
+- id: e-prep-outer-out
+  source: prep
+  target: outer
+  source_handle: out
+- id: e-outer-agg-out
+  source: outer
+  target: agg
+  source_handle: out
+- id: e-agg-judge-out
+  source: agg
+  target: judge
+  source_handle: out
+- id: e-judge-final-out
+  source: judge
+  target: final
+  source_handle: out
+- id: e-final-e-out
+  source: final
+  target: e
+  source_handle: out
+description: Agent 模式复杂工作流（Code+For+IF+Aggregate+LLM）

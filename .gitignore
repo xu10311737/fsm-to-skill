@@ -1,0 +1,39 @@
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# ===== 本地配置（含密钥，禁止提交） =====
+data/config.yaml
+
+# ===== 运行产物 / 调试脚本 =====
+work/
+exports/
+
+# ===== 日志 =====
+*.log
+server_*.log
+
+# ===== IDE / 系统 =====
+.idea/
+.vscode/
+.DS_Store
+Thumbs.db
+
+# ===== 测试临时目录 =====
+.pytest_cache/
+.pytest*/
+work/pytest_tmp/
+
+# ===== 本地运行/调试产物（保留 data/workflows/agent-complex.yaml 示例） =====
+data/workflows/wf-*
+
+# ===== trans-fsm-skill 生成的技能包 =====
+trans-fsm-skill/outputs/

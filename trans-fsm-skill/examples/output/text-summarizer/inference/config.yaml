@@ -1,0 +1,4 @@
+# 推理配置（示例）
+model: default
+temperature: 0.3
+max_tokens: 512

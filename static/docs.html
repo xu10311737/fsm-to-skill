@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8" />
+<title>fsm to skill 使用文档</title>
+<style>
+  body { font-family: -apple-system, "Segoe UI", "PingFang SC", "Microsoft YaHei", sans-serif;
+         max-width: 860px; margin: 0 auto; padding: 32px 24px; color: #1f2328; line-height: 1.85; }
+  h1 { font-size: 24px; border-bottom: 2px solid #d0d7de; padding-bottom: 10px; }
+  h2 { font-size: 18px; margin-top: 34px; border-left: 4px solid #0969da; padding-left: 10px; }
+  h3 { font-size: 15px; margin-top: 22px; }
+  code { background: #f6f8fa; padding: 2px 6px; border-radius: 4px; font-size: 13px;
+         font-family: Consolas, Menlo, monospace; }
+  pre { background: #f6f8fa; padding: 14px 16px; border-radius: 8px; overflow-x: auto; font-size: 13px; }
+  pre code { background: none; padding: 0; }
+  table { border-collapse: collapse; width: 100%; margin: 12px 0; font-size: 13.5px; }
+  th, td { border: 1px solid #d0d7de; padding: 7px 12px; text-align: left; }
+  th { background: #f6f8fa; }
+  .tip { background: #ddf4ff; border-left: 4px solid #0969da; padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+  .warn { background: #fff8c5; border-left: 4px solid #9a6700; padding: 10px 14px; border-radius: 0 8px 8px 0; margin: 14px 0; }
+</style>
+</head>
+<body>
+<h1>fsm to skill 使用文档</h1>
+<p>fsm to skill 是一个完全本地运行的工作流编排工具：在画布上以 DAG（有向无环图）方式组合 Code / LLM / 条件 / 循环 / 聚合节点，调试运行后一键导出为可被任意 LLM Agent 使用的 Skill 包。状态机是唯一流程控制器，LLM 只负责推理输出。</p>
+
+<h2>一、快速开始</h2>
+<ol>
+  <li>在「配置」中填写 LLM 服务商的 <code>base_url</code> 与 <code>api_key</code>，设置默认模型；如需运行 Code 节点可指定 Python 路径。</li>
+  <li>在编辑页画布中编排节点：点击或拖拽左侧组件到画布；点击节点右侧 <b>+</b> 追加后继节点，拖拽 <b>+</b> 到目标输入端口建立连线。</li>
+  <li>选中节点，在右侧配置面板完成配置；工具栏「校验」随时检查结构错误。</li>
+  <li>切到「运行」页，填写开始节点声明的输入变量，点击 ▶ 运行。</li>
+  <li>运行通过后，「导出 SKILL」生成 Skill 目录。</li>
+</ol>
+
+<h2>二、画布操作</h2>
+<table>
+  <tr><th>操作</th><th>方式</th></tr>
+  <tr><td>添加节点</td><td>点击左侧面板组件，或拖拽组件到画布；点击节点右侧 + 可自动追加并连线</td></tr>
+  <tr><td>连线</td><td>从节点右侧 + 拖拽到目标节点左侧 +</td></tr>
+  <tr><td>移动节点</td><td>拖拽节点主体</td></tr>
+  <tr><td>平移 / 缩放</td><td>拖拽空白处 / 滚轮</td></tr>
+  <tr><td>重命名 / 删除节点</td><td>右键节点</td></tr>
+  <tr><td>删除连线 / 中间插入节点</td><td>右键连线</td></tr>
+  <tr><td>定位错误节点</td><td>校验报告中点击「定位」</td></tr>
+</table>
+
+<h2>三、节点类型</h2>
+<h3>1. 开始节点（start）</h3>
+<p>每个工作流恰好一个，是整个 DAG 的入口。Start / End 节点不在右侧配置面板编辑；初始变量通过画布左上角「新增初始变量」维护，运行前需逐一填写。支持类型：<code>string / int / float / list / dict</code>。</p>
+<h3>2. Code 节点</h3>
+<p>在独立子进程中执行 Python 代码。输入采用 argparse 风格参数 schema（参数名称、描述、类型、是否必填），外部 JSON 参数统一使用连字符命名，例如 <code>arg-1</code>；Python 代码统一定义 <code>main(params)</code>，并通过 <code>params["arg-1"]</code> 读取输入。返回值必须是字典，字典 key 会自动成为输出变量名：</p>
+<pre><code>def main(params):
+    value = params["arg-1"]
+    return {
+        "result": value.upper(),
+        "length": len(value),
+    }</code></pre>
+<ul>
+  <li><b>输出</b>：由 <code>return {...}</code> 的字典 key 自动解析，可有多个输出；类型可在面板中调整，类型不匹配视为节点失败。</li>
+  <li><b>超时</b>：超时按失败处理。</li>
+  <li><b>错误分支</b>：勾选后节点多出唯一 <code>error</code> 出边，失败时沿 error 边进入 Prompt 节点，并产出 <code>&lt;节点ID&gt;-error-type</code> / <code>&lt;节点ID&gt;-error-message</code> 两个变量。</li>
+  <li><b>单节点调试</b>：配置面板底部只有一个「单节点调试」按钮；首次调试弹框输入参数，之后使用缓存入参直接运行。</li>
+</ul>
+<h3>3. Prompt 节点</h3>
+<p>根据模板渲染 Prompt，模板使用 Jinja2 语法：<code>{{ 变量名 }}</code>。在提示词输入框中键入 <code>/</code> 可弹出变量列表快速插入。Prompt 节点不在 DAG 引擎内调用模型、不产出 DAG 变量，只作为 Agent 出口返回消息；调试页收到该 Prompt 后再交给配置的大模型。</p>
+<h3>4. IF 节点</h3>
+<p>条件分支：可添加多条 IF 条件，并用 AND / OR 组合；每条条件包含变量、运算符（包含 / 不包含 / 开始是 / 结束是 / 是 / 不是 / 为空 / 不为空）与比较值（常量或变量）。节点只有 <code>if</code> 与 <code>else</code> 两条出边，未命中分支的下游会被标记为「跳过」。</p>
+<h3>5. For 节点</h3>
+<p>对列表变量逐项迭代：只需配置「列表来源」（仅可选择 list 类型变量）。点击「编辑循环体」打开子画布编排循环体（支持 Code / Prompt / IF / 聚合，不支持嵌套 For）。循环体内可使用 <code>index</code>（当前下标，int）、<code>item</code>（当前元素）、<code>len</code> / <code>total</code>（总长度）。Prompt 节点会自动追加当前轮次上下文，如 <code>5/10</code>。收集变量由循环体末端输出自动推导，结果组成 list 写入 <code>&lt;节点ID&gt;-output</code>。</p>
+<h3>6. 聚合节点（aggregate）</h3>
+<p>汇聚多个上游分支（例如 IF 的两个分支或 error 分支）的输出，只统计<b>成功</b>的上游。按输出类型聚合：<code>string</code> 换行拼接、<code>int/float</code> 求和、<code>list</code> 连接、<code>dict</code> 合并。输出为 <code>&lt;节点ID&gt;-output</code>。</p>
+<h3>7. 结束节点（end）</h3>
+<p>任一结束节点被命中，整个工作流立即终止。适合在错误处理分支末尾提前收尾。</p>
+
+<h2>四、变量系统</h2>
+<ul>
+  <li>变量按 DAG 上游路径传导，节点只能引用自身上游可达节点产出的变量；IF / ELSE 分支未经过的变量不会被视为当前节点可用。</li>
+  <li>同名变量只能由一个节点产出一次；系统默认提供全局变量 <code>task-id</code>，初始变量不能与其重名。</li>
+  <li>变量名由字母开头，可含字母、数字、下划线和连字符（保留字如 <code>result</code> 等不可作为输出名，系统自动产出的 <code>&lt;id&gt;-output</code>、<code>task-id</code>、<code>index</code>、<code>item</code>、<code>len</code>、<code>total</code> 除外）。</li>
+  <li>模板引用带连字符的变量（如 <code>for-1-output</code>）时可直接书写 <code>{{ for-1-output }}</code>，系统自动适配。</li>
+  <li>类型检查宽容 <code>null</code>：值为 None 时视为通过。</li>
+</ul>
+
+<h2>五、校验</h2>
+<p>工具栏「校验」按钮实时显示错误 / 警告数。导出 SKILL 前必须通过全部 Error 级校验（无环、单开始、变量可追溯、类型匹配、无嵌套 For 等 19 项）。点击校验按钮打开报告，可一键定位问题节点。</p>
+
+<h2>六、运行与调试</h2>
+<ul>
+  <li><b>输入</b>：调试页底部只有一个消息输入框；开始节点声明的初始变量使用编辑页默认赋值参与运行，list / dict 默认值请填 JSON。</li>
+  <li><b>实时状态</b>：节点四色：橙=运行中，绿=成功，红=失败，灰=跳过；点击节点在「节点详情」中查看 Prompt、思考过程、stdout/stderr、错误与产出变量。</li>
+  <li><b>对话区</b>：流式展示 LLM 输出与节点执行进度。</li>
+  <li><b>统计</b>：总耗时、各状态节点数、LLM 调用次数与 Token 用量、变量快照。</li>
+  <li><b>日志</b>：全部引擎事件流，可「导出日志」为 UTF-8 文本（不含 API Key）。</li>
+</ul>
+
+<h2>七、导出 SKILL</h2>
+<p>校验通过后，选择目标目录一键导出：</p>
+<pre><code>my-skill/
+├── SKILL.md          # 说明文档（入参表 / 输出 / 结构）
+├── agent_interface.json # Agent 到 Code / Prompt 的路由表
+├── workflow.yaml     # 工作流定义
+├── inference/        # LLM 提示词模板
+└── scripts/          # Code 节点脚本 + 自动生成的 main.py 状态机入口</code></pre>
+<div class="tip">目标目录已存在时会提示覆盖；导出失败不会残留不完整目录。</div>
+
+<h2>八、Agent / Code / Prompt 交互模型</h2>
+<p><code>scripts/main.py</code> 是导出 Skill 的总状态机线程；每个 Code 节点是 Agent 输入进入 DAG 的独立入口，每个 Prompt 节点是 DAG 输出返回 Agent 的出口。导出时会生成 <code>agent_interface.json</code> 用于标识路由：</p>
+<pre><code>{
+  "main_thread": "scripts/main.py",
+  "entries": [
+    {
+      "entry_id": "code-1",
+      "node_id": "code-1",
+      "direction": "agent_to_code",
+      "input_schema": [
+        {"name": "arg-1", "description": "输入参数", "type": "string", "required": true}
+      ],
+      "return_keys": ["result", "length"]
+    }
+  ],
+  "exits": [
+    {
+      "exit_id": "llm-1",
+      "node_id": "llm-1",
+      "direction": "prompt_to_agent",
+      "next_code_entries": []
+    }
+  ],
+  "agent_envelope": {
+    "agent_command": "python main.py --task-id &lt;task-id&gt; --step-id &lt;code_node_id&gt; --step-param '&lt;json_string&gt;'",
+    "task-id": "&lt;task-id&gt;",
+    "step-id": "&lt;actual_code_node_id&gt;",
+    "step-param": {"arg-1": "value"}
+  }
+}</code></pre>
+<p>Agent 调用时执行 <code>python main.py --task-id task-001 --step-id code-1 --step-param '{"arg-1":"hello"}'</code>，用 <code>--task-id</code> 标识同一次任务、用 <code>--step-id</code> 标识本次输入要进入哪个 Code 节点；状态机继续执行 DAG，直到遇到 Prompt 出口并把渲染后的字符串返回给 Agent。在线调试会使用当前 Python 解释器生成可执行命令；导出 Skill 后可按目标系统替换为 <code>python3</code>。正常 Prompt 末尾会动态附加 task-id、下一步待执行命令与入参说明；Code error 分支产生的 Prompt 不附加下一步 schema。</p>
+
+<h2>九、配置说明</h2>
+<table>
+  <tr><th>配置项</th><th>说明</th></tr>
+  <tr><td>providers.openai / compatible / anthropic</td><td>服务商 base_url 与 api_key；compatible 用于 OpenAI-compatible 私有网关</td></tr>
+  <tr><td>default_provider / default_model</td><td>LLM 节点默认使用的服务商与模型</td></tr>
+  <tr><td>timeout_seconds / max_retries</td><td>请求超时与网络错误重试次数（4xx 不重试）</td></tr>
+  <tr><td>stream</td><td>是否流式输出</td></tr>
+  <tr><td>python_path</td><td>Code 节点执行用的 Python 解释器路径，留空用当前环境</td></tr>
+  <tr><td>idle_timeout / max_task_runtime</td><td>Agent 等待下一次 shell 调用的空闲超时与整个 task 生命周期上限</td></tr>
+  <tr><td>shell_tool</td><td>是否允许大模型调用本地 shell / bash / PowerShell 工具执行下一步 Code 命令</td></tr>
+</table>
+<div class="warn">api_key 仅保存在本地配置文件中；界面回显为 ****** 时提交不会覆盖已保存的密钥。</div>
+<div class="tip">保存 / 打开工作流默认使用本机系统文件窗口并保存为 YAML；导出 SKILL 时选择导出父目录，系统会按工作流名称生成 Skill 文件夹。</div>
+</body>
+</html>

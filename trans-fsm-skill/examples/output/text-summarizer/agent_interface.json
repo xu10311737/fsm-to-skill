@@ -1,0 +1,16 @@
+{
+  "schema_version": "1.0.0",
+  "skill": "text-summarizer",
+  "entry": "start",
+  "routes": [
+    {
+      "type": "agent",
+      "target": "start"
+    },
+    {
+      "type": "command",
+      "name": "summarize",
+      "target": "start"
+    }
+  ]
+}

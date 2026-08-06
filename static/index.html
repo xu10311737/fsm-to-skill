@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>fsm to skill</title>
+  <meta name="description" content="可视化编辑、调试并导出 fsm to skill 工作流。" />
+  <link rel="stylesheet" href="css/app.css?v=20260806-visual" />
+</head>
+<body>
+  <a class="skip-link" href="#main">跳到工作区</a>
+  <header id="toolbar">
+    <div class="brand">
+      <span class="brand-icon" aria-hidden="true"></span>
+      <span class="brand-copy">
+        <strong>fsm to skill</strong>
+        <small>workflow studio</small>
+      </span>
+    </div>
+    <nav class="tabs tabs-center" aria-label="主视图">
+      <button class="tab active" data-tab="edit">编辑</button>
+      <button class="tab" data-tab="run">运行</button>
+    </nav>
+    <div class="workflow-meta">
+      <input id="wf-name" class="wf-name-input" type="text" spellcheck="false" aria-label="工作流名称" />
+      <button id="btn-validate" class="tb ghost badge-btn" title="查看校验报告"><span class="tb-ico i-check"></span><span class="tb-label">校验</span></button>
+    </div>
+    <div class="spacer"></div>
+    <div class="toolbar-actions" aria-label="工作流操作">
+      <div class="toolbar-group">
+        <button id="btn-docs" class="tb icon-text"><span class="tb-ico i-doc" aria-hidden="true"></span><span>文档</span></button>
+        <button id="btn-config" class="tb icon-text"><span class="tb-ico i-config" aria-hidden="true"></span><span>配置</span></button>
+        <button id="btn-open" class="tb icon-text"><span class="tb-ico i-open" aria-hidden="true"></span><span>打开</span></button>
+        <button id="btn-new" class="tb icon-text"><span class="tb-ico i-new" aria-hidden="true"></span><span>新建</span></button>
+        <button id="btn-save" class="tb icon-text"><span class="tb-ico i-save" aria-hidden="true"></span><span class="tb-label">保存</span></button>
+      </div>
+      <div class="toolbar-group toolbar-group-primary">
+        <button id="btn-export-skill" class="tb primary icon-text"><span class="tb-ico i-export" aria-hidden="true"></span><span>导出 SKILL</span></button>
+        <button id="btn-run-top" class="tb primary run-now icon-text"><span class="tb-ico i-run" aria-hidden="true"></span><span>运行</span></button>
+      </div>
+      <button id="btn-import" class="tb utility hidden">导入</button>
+      <input id="file-import" type="file" accept=".json,application/json" class="hidden" />
+      <button id="btn-export-json" class="tb utility hidden">导出 JSON</button>
+    </div>
+  </header>
+
+  <main id="main">
+    <!-- 编辑页 -->
+    <div id="page-edit" class="page">
+      <aside id="palette">
+        <div class="palette-head">
+          <div class="palette-title">节点类型</div>
+        </div>
+        <div class="palette-list">
+          <div class="palette-item start locked" data-type="start"><i class="node-glyph"></i><span>开始 (Start)</span></div>
+          <div class="palette-item code" data-type="code"><i class="node-glyph"></i><span>代码 (Code)</span></div>
+          <div class="palette-item llm" data-type="llm"><i class="node-glyph"></i><span>输出 Prompt (LLM)</span></div>
+          <div class="palette-item if" data-type="if"><i class="node-glyph"></i><span>判断 (IF/ELSE)</span></div>
+          <div class="palette-item for" data-type="for"><i class="node-glyph"></i><span>For 循环 (For Loop)</span></div>
+          <div class="palette-item aggregate" data-type="aggregate"><i class="node-glyph"></i><span>变量聚合</span></div>
+          <div class="palette-item end" data-type="end"><i class="node-glyph"></i><span>结束 (End)</span></div>
+        </div>
+        <div class="palette-hint">点击节点加入画布，从节点右侧端口拖出连线；连线中间的加号可插入节点。</div>
+      </aside>
+
+      <section id="canvas-wrap">
+        <div id="canvas-status" class="canvas-status">
+          <span id="canvas-error-pill" class="error-pill hidden"></span>
+        </div>
+        <div class="canvas-tools">
+          <button id="btn-canvas-add-initial-var" class="tb small" type="button">
+            <span class="tb-ico i-plus"></span><span>新增初始变量</span>
+          </button>
+          <button id="btn-canvas-autolayout" class="tb small" type="button">
+            <span class="tb-ico i-layout"></span><span>自动布局</span>
+          </button>
+        </div>
+        <svg class="canvas-edges"></svg>
+        <div class="canvas-content"></div>
+        <div id="canvas-empty" class="canvas-empty hidden" aria-hidden="true">
+          <div class="canvas-empty-inner">
+            <div class="canvas-empty-icon">
+              <svg viewBox="0 0 24 24" width="24" height="24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="7" width="6" height="6" rx="1"></rect>
+                <rect x="15" y="4" width="6" height="6" rx="1"></rect>
+                <rect x="15" y="14" width="6" height="6" rx="1"></rect>
+                <path d="M9 10h4M9 14h4M13 12h2"></path>
+              </svg>
+            </div>
+            <div class="canvas-empty-title">画布是空的</div>
+            <div class="canvas-empty-hint">从左侧面板点击或拖动节点，添加到画布，开始搭建工作流。</div>
+          </div>
+        </div>
+      </section>
+
+      <aside id="config-panel">
+        <div id="config-resizer" title="拖动调整配置面板宽度"></div>
+        <div id="config-head" class="panel-head"></div>
+        <div id="config-body" class="panel-body"></div>
+      </aside>
+    </div>
+
+    <!-- 运行页 -->
+    <div id="page-run" class="page hidden">
+      <section id="run-canvas-wrap">
+        <div class="run-map-head">
+          <span>DAG 实时运行图</span>
+          <span class="run-legend">
+            <i class="legend-dot idle"></i>未运行
+            <i class="legend-dot running"></i>运行中
+            <i class="legend-dot waiting"></i>等待
+            <i class="legend-dot ok"></i>成功
+            <i class="legend-dot bad"></i>失败
+          </span>
+        </div>
+        <svg class="canvas-edges"></svg>
+        <div class="canvas-content"></div>
+      </section>
+      <div id="run-resizer" title="拖动调整对话栏宽度"></div>
+      <aside id="run-side">
+        <div id="run-side-head">
+          <div>
+            <span class="panel-title">调试</span>
+            <div id="run-summary-line" class="panel-sub">等待运行</div>
+          </div>
+          <button id="btn-export-record" class="tb small" title="导出运行记录">导出日志</button>
+        </div>
+        <div id="run-stats"></div>
+        <div id="run-inputs" class="run-inputs"></div>
+        <div id="chat"></div>
+        <div id="node-detail" class="hidden"><div class="placeholder">点击画布中的节点查看详情</div></div>
+        <div id="run-composer">
+          <textarea id="run-user-input" class="input" rows="2" placeholder="请输入消息..."></textarea>
+          <div id="run-actions">
+            <button id="btn-exec" class="tb primary icon-only" title="发送" aria-label="发送并运行">
+              <span class="tb-ico i-send"></span>
+            </button>
+            <button id="btn-stop" class="tb danger hidden" disabled>停止</button>
+          </div>
+        </div>
+      </aside>
+    </div>
+  </main>
+
+  <!-- 通用模态框 -->
+  <div id="modal" class="hidden">
+    <div class="modal-box">
+      <div class="modal-head">
+        <span id="modal-title" class="panel-title"></span>
+        <button id="modal-close" class="btn icon" aria-label="关闭">✕</button>
+      </div>
+      <div id="modal-body"></div>
+      <div id="modal-footer"></div>
+    </div>
+  </div>
+
+  <!-- 右键菜单 -->
+  <div id="ctx-menu" class="hidden"></div>
+
+  <!-- Toast -->
+  <div id="toast"></div>
+
+<script type="module" src="js/app.js?v=20260804-loop-code-debug-2"></script>
+</body>
+</html>

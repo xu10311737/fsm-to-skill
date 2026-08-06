@@ -1,0 +1,82 @@
+id: text-summarizer
+name: Text Summarizer
+description: 对文本生成摘要、提取要点，并可按指定语言输出。
+nodes:
+- id: start
+  type: start
+  name: start
+  config:
+    inputs:
+    - name: text
+      type: string
+    - name: language
+      type: string
+  position:
+    x: 80
+    y: 200
+- id: summarize
+  type: llm
+  name: summarize
+  config:
+    prompt: |
+      请对以下文本生成不超过 200 字的中文摘要。
+
+      文本：
+      {{ text }}
+  position:
+    x: 360
+    y: 200
+- id: extract
+  type: code
+  name: extract
+  config:
+    inputs:
+    - name: summary
+      type: string
+      source: summarize-output
+    outputs:
+    - name: bullet_points
+      type: list
+    code: |
+      def main(summary):
+          lines = [line.strip() for line in summary.split("。") if line.strip()]
+          return {'bullet_points': lines[:5]}
+  position:
+    x: 640
+    y: 200
+- id: translate
+  type: llm
+  name: translate
+  config:
+    prompt: |
+      将以下摘要翻译为 {{ language }} 语言。
+
+      摘要：
+      {{ summary }}
+  position:
+    x: 920
+    y: 200
+- id: end
+  type: end
+  name: end
+  config: {}
+  position:
+    x: 1200
+    y: 200
+edges:
+- id: e-start-summarize
+  source: start
+  target: summarize
+  source_handle: out
+- id: e-summarize-extract
+  source: summarize
+  target: extract
+  source_handle: out
+- id: e-extract-translate
+  source: extract
+  target: translate
+  source_handle: out
+- id: e-translate-end
+  source: translate
+  target: end
+  source_handle: out
