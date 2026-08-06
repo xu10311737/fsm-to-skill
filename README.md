@@ -21,8 +21,9 @@
 
 fsm to skill 是一个**完全本地运行**的工作流编排工具：纯前端画布 + Python 后端引擎。你通过拖拽节点构建有向无环图（DAG），接入真实 Agent 在线调试，跑通后一键导出为标准 Skill 目录，供任何支持命令行交互的 Agent 加载使用。
 
+---
 
-当 Agent Skill 变得复杂...
+**当 Agent Skill 变得复杂...**
 
 **流程失控与幻觉**：
 复杂的 Skill 往往包含各种分支判断和流程约束。随着冗余和冲突描述的增加，AI 越改越费力。Skill 越庞大和复杂，越容易诱发大模型的奖励黑客行为和逻辑幻觉。
@@ -67,7 +68,7 @@ fsm to skill解决的痛点:
 
 ```bash
 # 1. 克隆仓库
-git clone https://github.com/xu10311737/fms-to-skill.git
+git clone https://github.com/xu10311737/fsm-to-skill.git
 cd fsm-to-skill
 
 # 2. 创建虚拟环境（可选但推荐）
@@ -205,4 +206,4 @@ fsm-to-skill/
 
 ## License
 
-[MIT](./LICENSE)# fms-to-skill
+[MIT](./LICENSE)# fsm-to-skill

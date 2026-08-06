@@ -20,7 +20,9 @@
 
 fsm to skill is a **fully local** workflow orchestration tool: a pure front-end canvas plus a Python back-end engine. You build a directed acyclic graph (DAG) by dragging nodes, connect a real LLM for online debugging, and once it passes, export a standard Skill directory that any command-line-interacting Agent can load.
 
-When an Agent Skill gets complex...
+---
+
+**When an Agent Skill gets complex...**
 
 **Flow control lost & hallucination**:
 Complex Skills inevitably contain various branch decisions and flow constraints. As redundant and conflicting descriptions pile up, the AI works harder and harder to fix them. The bigger and more complex the Skill, the easier it is to induce reward hacking and logical hallucination in the LLM.
@@ -64,7 +66,7 @@ Pain points fsm to skill solves:
 
 ```bash
 # 1. Clone the repository
-git clone https://github.com/xu10311737/fms-to-skill.git
+git clone https://github.com/xu10311737/fsm-to-skill.git
 cd fsm-to-skill
 
 # 2. Create a virtual environment (optional but recommended)
