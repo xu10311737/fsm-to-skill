@@ -1,24 +1,22 @@
-# fsm to skill · DAG Workflow Orchestration → Skill Export Engine
+# fsm-to-skill · Transform Complex Flows into a State-Machine-Controlled SKILL
 
 > Let the LLM return to its "reasoning" job, and hand "flow control" back to the classic, rigorous finite state machine (FSM).
 
-> A fully local, lightweight SKILL orchestration and generation tool based on a state machine (FSM).
+> A fully local, lightweight SKILL orchestration and generation tool based on a state machine (FSM). Build flows on a canvas, debug locally, and export Skills with one click.
 
 [中文](./README.md) · [Documentation](./static/docs.html) · [License](./LICENSE)
 
 ---
 
-## Screenshot
+## Interface Preview
 
-![界面预览](images/screenshot-build.png)
+![Interface Preview](images/screenshot-build.png)
 
-![界面预览](images/screenshot-run.png)
+![Interface Preview](images/screenshot-run.png)
 
 ---
 
-## Why fsm to skill
-
-fsm to skill is a **fully local** workflow orchestration tool: a pure front-end canvas plus a Python back-end engine. You build a directed acyclic graph (DAG) by dragging nodes, connect a real LLM for online debugging, and once it passes, export a standard Skill directory that any command-line-interacting Agent can load.
+## Why fsm-to-skill
 
 ---
 
@@ -28,16 +26,25 @@ fsm to skill is a **fully local** workflow orchestration tool: a pure front-end 
 Complex Skills inevitably contain various branch decisions and flow constraints. As redundant and conflicting descriptions pile up, the AI works harder and harder to fix them. The bigger and more complex the Skill, the easier it is to induce reward hacking and logical hallucination in the LLM.
 
 **Maintenance cost**:
-A complex Skill has no clear logical boundary. Once the business logic changes, facing thousands of lines of prompts, developers struggle to maintain and iterate effectively. The AI works harder, the SKILL grows bigger.
+A complex Skill has no clear logical boundary. Once the business logic changes, facing hundreds or thousands of lines of prompts, developers struggle to maintain and iterate effectively. The AI works harder and harder, and the SKILL grows bigger and bigger.
 
 **Key constraints forgotten**:
 Once the execution chain gets too long, the LLM's attention scatters and important constraints get ignored. For example, when asked to execute 100 similar but complex tasks one by one, the LLM often fails to do each rigorously and tends to miss key constraints or skip steps.
 
-Pain points fsm to skill solves:
+---
+
+**Core idea**:
+
+- The state machine is the sole flow controller; the flow is entirely driven by the state machine.
+- Single entry: the state machine is the only entry for Agent interaction, producing standard SOP guidance and a dedicated Prompt for each Step.
+- On-demand presentation: at each step the Agent only sees what it needs to see, lowering cognitive load and thoroughly avoiding forgotten key constraints.
+- Input validation: each step strictly validates the Agent's output and loops the validation result back to the Agent for correction.
+
+Pain points fsm-to-skill solves:
 
 - Complex inference flows scattered across hand-written prompts — hard to reuse or compose.
 - Wanting an LLM Agent to have deterministic, multi-step, branchable, loopable, and computable flows without writing a state machine.
-- After a SKILL is written, debugging is opaque — you don't know where things went wrong.
+- After a SKILL is written, debugging is opaque — you don't know which step drifted.
 - Orchestration results are hard to persist as shareable, versionable Skill assets.
 
 ---
@@ -107,34 +114,23 @@ The browser opens `http://localhost:8000` automatically (default port; adjustabl
 
 | Node | Description |
 | --- | --- |
-| **start** | The DAG entry of every workflow; declares input variables (string/int/float/list/dict). |
-| **code** | Runs Python in a subprocess. Inputs use an argparse-style param schema; the code defines `main(params)`; the returned dict automatically becomes output variables. |
-| **llm** | Renders a prompt (Jinja2, `{{ var }}`). The engine itself does not call the model; it acts as the Agent exit returning a message. |
-| **if** | Conditional branch: multiple IF conditions combined with AND/OR; only `if`/`else` out-edges. |
-| **for** | Iterates a list variable; a sub-canvas orchestrates the loop body; local vars `index/item/len/total`. |
+| **start** | The DAG entry of every workflow; declares input variables. |
+| **code** | Runs Python in a subprocess. Inputs use an argparse-style param schema; the returned dict automatically becomes output variables; syntax errors are auto-checked, with single-node debugging. Supports error handling: retry / error branch. |
+| **llm** | Renders a prompt, supports inserting variables. The engine itself does not call the model; it acts as the Agent exit returning a message. |
+| **if** | Conditional branch: supports one or more IF exits. |
+| **for** | Iterates a list variable; a sub-canvas orchestrates the loop body. |
 | **aggregate** | Merges multiple successful upstreams by type (string join / numeric sum / list concat / dict merge). |
 | **end** | Any end hit terminates the whole workflow immediately — great for early exit on error branches. |
-
-### Code node example
-
-```python
-def main(params):
-    value = params["arg-1"]
-    return {
-        "result": value.upper(),
-        "length": len(value),
-    }
-```
 
 ---
 
 ## Run & Debug
 
-- **Live states**: four colors — orange=running, green=success, red=failed, gray=skipped.
-- **Node details**: inspect prompt, reasoning, stdout/stderr, errors, and produced variables.
+- **Live states**: node states tracked in real time, with per-node elapsed time.
+- **Node details**: inspect Prompt, reasoning, stdout/stderr, errors, and produced variables.
 - **Stats**: total time, node counts by state, LLM calls & token usage, variable snapshots.
-- **Logs**: full engine event stream; export logs as UTF-8 text.
-- **Single-node debug**: run a Code node alone with explicit params to verify the logic fast.
+- **Logs**: full engine event stream; export logs as text.
+- **Single-node debug**: run a Code node alone with explicit params to quickly verify script logic.
 
 ---
 
@@ -155,8 +151,7 @@ my-skill/
 
 ## Agent / Code / Prompt Interaction Model
 
-`scripts/main.py` is the total state-machine thread of the exported Skill; each **Code node is an independent entry for Agent input into the DAG**, and each **Prompt node is the exit that returns DAG output to the Agent**.
-
+- `scripts/main.py` is the total state-machine thread of the exported Skill;
 - **code node = entry**: the total thread routes the input to the entry of each code node and executes it.
 - **Prompt node = exit**: the engine pauses at a Prompt node, rendering the string and returning it to the Agent; the Agent's next call re-enters through a Code node.
 
@@ -189,9 +184,9 @@ fsm-to-skill/
 │   └── js/ css/
 ├── data/
 │   ├── config.yaml         # local config
-│   └── workflows/          #  workflows
+│   └── workflows/          # local workflows
 ├── trans-fsm-skill/        # prebuilt skills: convert an existing SKILL into an fsm skill
-├── work/                   # runtime artifacts / debug scripts 
+├── work/                   # runtime artifacts / debug scripts
 ├── main.py                 # FastAPI entry
 ├── run.py                  # launcher
 ├── requirements.txt        # runtime deps
