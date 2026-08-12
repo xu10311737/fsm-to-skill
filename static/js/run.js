@@ -13,6 +13,8 @@ let tokenBuffers = {};
 let runSessionId = null;
 let eventLog = [];
 let lastUserInput = "";
+let piStats = null;
+let piAbort = null;
 
 export function initRun() {
   chatBox = document.getElementById("chat");
@@ -28,7 +30,7 @@ export function initRun() {
     onSelect: (id) => renderNodeDetail(id),
   });
 
-  document.getElementById("btn-exec").addEventListener("click", startRun);
+  document.getElementById("btn-pi-run").addEventListener("click", startPiRun);
   document.getElementById("btn-stop").addEventListener("click", stopRun);
   document.getElementById("btn-export-record")
     .addEventListener("click", exportRecord);
@@ -162,6 +164,215 @@ async function startRun() {
     setRunning(false);
     session = null;
   }
+}
+
+async function startPiRun() {
+  if (state.running) return;
+  let inputs;
+  try {
+    inputs = collectInputs();
+  } catch (err) {
+    toast(err.message, "error");
+    return;
+  }
+  try {
+    const rep = await fetchValidate();
+    state.validation = rep;
+    if ((rep.errors || []).length) {
+      toast(`存在 ${rep.errors.length} 个校验错误，请先修复`, "error", 4500);
+      return;
+    }
+  } catch (err) {
+    toast(`校验失败：${err.message}`, "error");
+    return;
+  }
+
+  resetRunView();
+  setRunning(true);
+  if (state.lastResult) {
+    state.lastResult._pi = true;
+  }
+  addChat("system", `用 pi-agent 启动，task-id: ${inputs["task-id"]}`);
+  state.piTaskId = inputs["task-id"];
+  piStats = { input: 0, output: 0, cache: 0, total: 0, hasData: false };
+  renderPiStatsBox();
+  piAbort = new AbortController();
+  try {
+    const resp = await fetch("/api/run/pi", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ workflow: serializeWorkflow(), inputs }),
+      signal: piAbort.signal,
+    });
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const data = await resp.json();
+        detail = (data && (data.detail?.message || data.detail)) || detail;
+      } catch { /* ignore */ }
+      throw new Error(typeof detail === "string" ? detail : JSON.stringify(detail));
+    }
+    if (!resp.body) throw new Error("后端未返回可读流");
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+    for (;;) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const chunks = buffer.split("\n\n");
+      buffer = chunks.pop();
+      for (const chunk of chunks) {
+        for (const line of chunk.split("\n")) {
+          if (!line.startsWith("data:")) continue;
+          const payload = line.slice(5).trim();
+          if (!payload) continue;
+          let evt;
+          try { evt = JSON.parse(payload); } catch { continue; }
+          handlePiEvent(evt);
+        }
+      }
+    }
+  } catch (err) {
+    if (err.name !== "AbortError") {
+      addChat("system", `pi-agent 运行失败：${err.message}`, "error");
+      toast(err.message, "error", 5000);
+    }
+  } finally {
+    setRunning(false);
+    piAbort = null;
+  }
+}
+
+function markNodeStatus(id, status) {
+  if (!id) return;
+  if (!(id in state.nodeStatuses)) return;
+  state.nodeStatuses = { ...state.nodeStatuses, [id]: status };
+  runCanvas.setStatuses(state.nodeStatuses);
+}
+
+function handlePiEvent(evt) {
+  switch (evt.type) {
+    case "info":
+      addChat("system", evt.msg, "ok");
+      break;
+    case "model": {
+      const name = evt.name || evt.id || "未知模型";
+      addChat("system",
+        `pi-agent 模型：${name}${evt.provider ? `（${evt.provider}）` : ""}`, "ok");
+      break;
+    }
+    case "round":
+      addChat("system", `pi-agent 第 ${evt.n} 轮交互`, "ok");
+      break;
+    case "agent_thinking":
+      if (evt.content) {
+        addChat("thinking", evt.content, null,
+          `pi-agent 思考（第 ${evt.round || "?"} 轮）`);
+        eventLog.push(`[pi 思考]\n${evt.content}`);
+      }
+      break;
+    case "agent_text":
+      if (evt.content) {
+        addChat("llm", evt.content, null,
+          `pi-agent 回复（第 ${evt.round || "?"} 轮）`);
+        eventLog.push(`[pi 回复]\n${evt.content}`);
+      }
+      break;
+    case "fsm_cmd":
+      markNodeStatus(evt.stepId, "running");
+      eventLog.push(
+        `[pi 执行]\nrun_fsm_step(task-id: ${evt.taskId}, step-id: ${evt.stepId})\n参数: ${JSON.stringify(evt.stepParam, null, 2)}`);
+      addChat("code",
+        `run_fsm_step(task-id: ${evt.taskId}, step-id: ${evt.stepId})\n参数: ${JSON.stringify(evt.stepParam, null, 2)}`,
+        null, `pi-agent 执行 fsm step (${evt.stepId})`);
+      break;
+    case "agent_tool_result":
+      if (evt.stepId && state.nodeStatuses[evt.stepId] === "running") {
+        markNodeStatus(evt.stepId, "success");
+      }
+      if (evt.content) {
+        addChat("code", evt.content, null,
+          `run_fsm_step 返回 (${evt.name || "tool"})`);
+        eventLog.push(`[pi 工具返回]\n${evt.content}`);
+      }
+      break;
+    case "node_statuses":
+      if (evt.statuses && typeof evt.statuses === "object") {
+        state.nodeStatuses = { ...state.nodeStatuses, ...evt.statuses };
+        runCanvas.setStatuses(state.nodeStatuses);
+      }
+      break;
+    case "prompt":
+      if (evt.content) {
+        addChat("prompt", evt.content, null,
+          `prompt 节点${evt.nodeId ? ` (${evt.nodeId})` : ""}`);
+        eventLog.push(`[pi prompt${evt.nodeId ? ` ${evt.nodeId}` : ""}]\n${evt.content}`);
+      }
+      break;
+    case "token":
+      renderPiToken(evt);
+      break;
+    case "done": {
+      const failed = evt.status === "failed" || evt.status === "error";
+      const status = failed ? "failed" : "success";
+      const node_records = {};
+      for (const [id, st] of Object.entries(state.nodeStatuses)) {
+        if (st === "running" || st === "success") {
+          node_records[id] = { status };
+        }
+      }
+      for (const id of Object.keys(state.nodeStatuses)) {
+        if (state.nodeStatuses[id] === "running") markNodeStatus(id, status);
+      }
+      addChat("system", `pi-agent 任务完成（${status}）`, "ok");
+      state.lastResult = {
+        status,
+        "task-id": evt.taskId || state.piTaskId,
+        user_input: lastUserInput,
+        _pi: true,
+        node_records,
+      };
+      document.getElementById("btn-export-record").disabled = false;
+      updateSummaryLine({ agent_response: true });
+      break;
+    }
+    case "error":
+      addChat("system",
+        `pi-agent 错误：${evt.msg}${evt.hint ? `（${evt.hint}）` : ""}`, "error");
+      break;
+    case "stderr":
+      if (evt.data) addChat("code", evt.data, null, "pi-agent stderr");
+      break;
+    default:
+      break;
+  }
+}
+
+function renderPiToken(evt) {
+  const t = evt.tokens || {};
+  piStats.input = t.input || 0;
+  piStats.output = t.output || 0;
+  piStats.cache = (t.cacheRead || 0) + (t.cacheWrite || 0);
+  piStats.total = t.total || 0;
+  piStats.hasData = true;
+  if (t.userMessages != null) piStats.userMessages = t.userMessages;
+  if (t.assistantMessages != null) piStats.assistantMessages = t.assistantMessages;
+  if (t.toolCalls != null) piStats.toolCalls = t.toolCalls;
+  renderPiStatsBox();
+}
+
+function renderPiStatsBox() {
+  statsBox.innerHTML = "";
+  const card = (label, value) => el("div", { class: "stat-card" },
+    el("div", { class: "stat-value", text: String(value) }),
+    el("div", { class: "stat-label", text: label }));
+  statsBox.append(
+    card("pi 输入 token", piStats?.hasData ? piStats.input : "-"),
+    card("pi 输出 token", piStats?.hasData ? piStats.output : "-"),
+    card("pi 缓存 token", piStats?.hasData ? piStats.cache : "-"),
+    card("pi 总 token", piStats?.hasData ? piStats.total : "-"),
+  );
 }
 
 async function fetchValidate() {
@@ -416,11 +627,11 @@ function resetRunView() {
 function stopRun() {
   if (session) session.abort();
   if (agentAbort) agentAbort.abort();
+  if (piAbort) piAbort.abort();
 }
 
 function setRunning(running) {
   state.running = running;
-  document.getElementById("btn-exec").disabled = running;
   const stopBtn = document.getElementById("btn-stop");
   stopBtn.disabled = !running;
   stopBtn.classList.toggle("hidden", !running);
@@ -873,11 +1084,16 @@ function exportRecord() {
   }
   const blob = new Blob([buildReadableLog()],
     { type: "text/plain;charset=utf-8" });
+  const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
-  a.href = URL.createObjectURL(blob);
+  a.href = url;
   a.download = `debug-log-${Date.now()}.txt`;
+  a.style.display = "none";
+  document.body.appendChild(a);
   a.click();
-  URL.revokeObjectURL(a.href);
+  a.remove();
+  // 延迟 revoke，避免在部分浏览器中下载被取消
+  setTimeout(() => URL.revokeObjectURL(url), 1000);
 }
 
 function buildReadableLog() {

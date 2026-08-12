@@ -92,9 +92,20 @@
   <li><b>对话区</b>：流式展示 LLM 输出与节点执行进度。</li>
   <li><b>统计</b>：总耗时、各状态节点数、LLM 调用次数与 Token 用量、变量快照。</li>
   <li><b>日志</b>：全部引擎事件流，可「导出日志」为 UTF-8 文本（不含 API Key）。</li>
+  <li><b>pi-agent 运行</b>：内置 Node 驱动（<code>pi-agent/driver.mjs</code>），可模拟外部 Agent 端到端驱动 FSM Skill，所有环节经 SSE 实时转发到界面。</li>
 </ul>
 
-<h2>七、导出 SKILL</h2>
+<h2>七、pi-agent 集成与 FSM Skill 验证</h2>
+<p>「运行」页支持 <b>pi-agent 运行</b> 模式：后端把工作流推进到首个 Prompt 出口后，spawn <code>pi-agent/driver.mjs</code>（Node 子进程）充当外部 Agent，自主完成「读 Prompt → 调 LLM → 执行 Code step → 再读 Prompt」直到任务结束。</p>
+<ul>
+  <li><b>实时转发</b>：首个 Prompt 及后续每轮 Prompt / 模型回复 / 工具调用 / Token 统计均经 SSE 转发到界面，首个 Prompt（prompt-1）也会同步展示。</li>
+  <li><b>正确收尾</b>：driver 每轮交互后若未执行任何 step，会调用 <code>main.py --task-id X --finalize</code> 收尾，保证 Terminal Prompt 后任务正确结束，避免死循环。</li>
+  <li><b>工作区隔离</b>：每个任务的独立工作区位于 <code>data/runtime/&lt;safe_task_id&gt;</code>，与项目根路径隔离。</li>
+  <li><b>前置依赖</b>：需安装 Node.js，并在 <code>pi-agent/</code> 目录执行 <code>npm install</code>。</li>
+</ul>
+<p>本次发布已通过 <b>pi-agent 端到端测试验证 FSM Skill</b>：以「start → code-1 → llm-1(Prompt) → code-2 → llm-2(对 Terminal Prompt) → end」为样例，实测验证了「执行 → Prompt → 再执行 → 终止」的完整循环，任务以 <code>finished=True</code> 正确结束，无死循环日志。</p>
+
+<h2>八、导出 SKILL</h2>
 <p>校验通过后，选择目标目录一键导出：</p>
 <pre><code>my-skill/
 ├── SKILL.md          # 说明文档（入参表 / 输出 / 结构）
@@ -104,7 +115,7 @@
 └── scripts/          # Code 节点脚本 + 自动生成的 main.py 状态机入口</code></pre>
 <div class="tip">目标目录已存在时会提示覆盖；导出失败不会残留不完整目录。</div>
 
-<h2>八、Agent / Code / Prompt 交互模型</h2>
+<h2>九、Agent / Code / Prompt 交互模型</h2>
 <p><code>scripts/main.py</code> 是导出 Skill 的总状态机线程；每个 Code 节点是 Agent 输入进入 DAG 的独立入口，每个 Prompt 节点是 DAG 输出返回 Agent 的出口。导出时会生成 <code>agent_interface.json</code> 用于标识路由：</p>
 <pre><code>{
   "main_thread": "scripts/main.py",
@@ -153,7 +164,7 @@
 }</code></pre>
 <p>Agent 调用时执行 <code>python main.py --task-id task-001 --step-id code-1 --step-param-b64 '&lt;base64&gt;'</code>，用 <code>--task-id</code> 标识同一次任务、用 <code>--step-id</code> 标识本次输入要进入哪个 Code 节点；节点入参以 base64 编码经 <code>--step-param-b64</code> 传入，避免各 shell 对内层引号转义不一致的问题。状态机继续执行 DAG，直到遇到 Prompt 出口并把渲染后的字符串返回给 Agent。在线调试会使用当前 Python 解释器生成可执行命令（Windows 下为 PowerShell 语法，例如 <code>&amp; 'C:\Python314\python.exe' '...'</code>）；导出 Skill 后可按目标系统替换为 <code>python3</code>。正常 Prompt 末尾会动态附加 task-id、下一步待执行命令与入参说明；Code error 分支产生的 Prompt 不附加下一步 schema。</p>
 
-<h2>九、配置说明</h2>
+<h2>十、配置说明</h2>
 <table>
   <tr><th>配置项</th><th>说明</th></tr>
   <tr><td>providers.openai / compatible / anthropic</td><td>服务商 base_url 与 api_key；compatible 用于 OpenAI-compatible 私有网关</td></tr>
@@ -164,7 +175,7 @@
   <tr><td>idle_timeout / max_task_runtime</td><td>Agent 等待下一次 shell 调用的空闲超时与整个 task 生命周期上限</td></tr>
   <tr><td>shell_tool</td><td>对象配置：<code>enabled</code>（是否允许大模型调用本地 shell 工具执行下一步 Code 命令）、<code>shell</code>（auto / bash / sh / powershell / pwsh）、<code>timeout_seconds</code>（单条命令超时）、<code>max_calls</code>（单次任务最多调用次数，默认 100）</td></tr>
 </table>
-<p><strong>Agent 工具集</strong>：除 <code>shell</code> 外，Agent 还暴露 <code>read_file</code> / <code>write_file</code> 工具用于读写工作区文件。这些均属于软约束——模型是否调用、调用多少取决于其自主判断。</p>
+<p><strong>内置 Agent 工具集</strong>：Agent 内置三类工具——<code>shell</code>（bash / sh / powershell，自动识别，执行下一步 Code 命令）、<code>read_file</code>（读取工作区文本文件）、<code>write_file</code>（写入 / 编辑工作区文本文件，即 read / edit 能力）。这些均属于软约束——模型是否调用、调用多少取决于其自主判断。</p>
 <div class="warn">任务终止没有硬性机制：跑完 DAG 后是否返回、何时停止调用工具，完全依赖模型自觉（提示词约束）。系统仅以 <code>shell_tool.max_calls</code>、<code>idle_timeout</code>、<code>max_task_runtime</code> 做兜底，不会检测到"任务已结束"就强制中断模型。</div>
 <div class="warn">api_key 仅保存在本地配置文件中；界面回显为 ****** 时提交不会覆盖已保存的密钥。</div>
 <div class="tip">保存 / 打开工作流默认使用本机系统文件窗口并保存为 YAML；导出 SKILL 时选择导出父目录，系统会按工作流名称生成 Skill 文件夹。</div>

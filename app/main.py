@@ -6,9 +6,12 @@ Skill 导出 / 运行记录查询。
 from __future__ import annotations
 
 import asyncio
+import base64
 import copy
 import json
+import os
 import re
+import shutil
 import time
 import uuid
 from datetime import datetime, timezone
@@ -34,6 +37,123 @@ from .services.exporter import export_skill
 from .validator.validator import validate_workflow
 
 MASK = "******"
+
+# pi-agent 的模型/鉴权配置目录（默认 ~/.pi/agent）
+PI_AGENT_DIR = Path(os.environ.get(
+    "PI_AGENT_DIR", str(Path.home() / ".pi" / "agent")))
+
+
+def _sync_pi_agent_config(config: dict[str, Any]) -> None:
+    """把页面保存的模型配置同步写入 pi-agent 的 models.json / settings.json。
+
+    pi-agent driver（独立 Node 进程）用 ~/.pi/agent 下的配置选择模型，
+    与后端 data/config.yaml 相互独立。为了让页面配置真实生效于 pi 模式，
+    保存配置时把 default_provider / default_model 及 base_url / api_key
+    同步过去。保留已有 model 元数据，避免破坏用户手动配置的细节。
+    """
+    try:
+        agent_dir = Path(PI_AGENT_DIR)
+        agent_dir.mkdir(parents=True, exist_ok=True)
+        models_file = agent_dir / "models.json"
+        settings_file = agent_dir / "settings.json"
+
+        # 读取既有 models.json（保留用户已有 provider / model 元数据）
+        try:
+            existing = json.loads(models_file.read_text(encoding="utf-8"))
+            if not isinstance(existing, dict):
+                existing = {}
+        except (OSError, ValueError):
+            existing = {}
+        providers_out = existing.get("providers") or {}
+
+        page_providers = config.get("providers") or {}
+        default_provider = config.get("default_provider") or ""
+        default_model = (config.get("default_model") or "").strip()
+
+        # 收集既有 provider 的 apiKey（按 baseUrl 索引），用于 api_key 为空时继承
+        def _base_to_key(providers_map):
+            m = {}
+            for p in providers_map.values():
+                if isinstance(p, dict) and p.get("baseUrl") and p.get("apiKey"):
+                    m.setdefault(p["baseUrl"], p["apiKey"])
+            return m
+
+        inherit_keys = _base_to_key(providers_out)
+
+        for name, pcfg in page_providers.items():
+            if not isinstance(pcfg, dict):
+                continue
+            base_url = (pcfg.get("base_url") or "").strip()
+            api_key = (pcfg.get("api_key") or "").strip()
+            entry = dict(providers_out.get(name) or {})
+            if base_url:
+                entry["baseUrl"] = base_url
+            if api_key:
+                entry["apiKey"] = api_key
+            elif base_url and not entry.get("apiKey"):
+                # 页面 api_key 为空时，按相同 baseUrl 从既有 provider 继承 key，
+                # 避免 default 指向的 provider 因缺 key 而认证失败
+                entry["apiKey"] = inherit_keys.get(base_url) or ""
+            # api 类型：anthropic 风格走 anthropic，其余走 openai-completions
+            api_lower = base_url.lower()
+            if "anthropic" in api_lower:
+                entry["api"] = "anthropic"
+            else:
+                entry.setdefault("api", "openai-completions")
+            # 确保 default_model 出现在这条 provider 的模型列表里
+            models = entry.get("models") or []
+            if default_model and not any(
+                    (m or {}).get("id") == default_model for m in models):
+                models.append(_default_pi_model(default_model))
+            entry["models"] = models
+            providers_out[name] = entry
+
+        # 设置默认 provider / model
+        if default_provider:
+            providers_out.setdefault(default_provider, {
+                "baseUrl": "", "api": "openai-completions", "apiKey": "",
+                "models": ([_default_pi_model(default_model)]
+                           if default_model else []),
+            })
+        models_file.write_text(
+            json.dumps({"providers": providers_out},
+                       ensure_ascii=False, indent=2),
+            encoding="utf-8")
+
+        # settings.json：defaultProvider / defaultModel
+        try:
+            settings = json.loads(settings_file.read_text(encoding="utf-8"))
+            if not isinstance(settings, dict):
+                settings = {}
+        except (OSError, ValueError):
+            settings = {}
+        if default_provider:
+            settings["defaultProvider"] = default_provider
+        if default_model:
+            settings["defaultModel"] = default_model
+        settings.setdefault("defaultProjectTrust", "trusted")
+        settings_file.write_text(
+            json.dumps(settings, ensure_ascii=False, indent=2),
+            encoding="utf-8")
+    except OSError as e:  # 同步失败不影响主配置保存
+        import logging
+        logging.getLogger("app").warning(
+            "同步 pi-agent 模型配置失败: %s", e)
+
+
+def _default_pi_model(model_id: str) -> dict[str, Any]:
+    """为 pi 生成一条最小可用的 model 条目。"""
+    return {
+        "id": model_id,
+        "name": model_id,
+        "reasoning": False,
+        "input": ["text"],
+        "contextWindow": 128000,
+        "maxTokens": 16384,
+        "cost": {"input": 0.5, "output": 2,
+                 "cacheRead": 0.1, "cacheWrite": 1},
+        "compat": {"supportsDeveloperRole": False},
+    }
 
 
 def _new_workflow(name: str) -> dict:
@@ -206,6 +326,95 @@ def create_app(data_dir: str | Path) -> FastAPI:
                     break
             result = await task
             _save_run_record(runs_dir, wf, result)
+
+        return StreamingResponse(event_stream(),
+                                 media_type="text/event-stream")
+
+    # --------------------------------------------------------------
+    # pi-agent 模拟外部 Agent（Node 驱动，进度与 token 经 SSE 转发）
+    @app.post("/api/run/pi")
+    async def run_pi_agent(body: dict):
+        """用 pi-agent 模拟外部 Agent 驱动工作流直到完成。
+
+        后端启动任务到首个 waiting，spawn pi-agent driver（Node 子进程），
+        把 driver 的进度与 token 统计经 SSE 转发给前端。
+        """
+        wf = body.get("workflow")
+        if not isinstance(wf, dict):
+            raise HTTPException(400, detail="workflow 字段缺失")
+        raw_inputs = body.get("inputs") or {}
+        if not isinstance(raw_inputs, dict):
+            raise HTTPException(400, detail="inputs 必须是对象")
+        inputs = dict(raw_inputs)
+        task_id = _ensure_task_id(inputs)
+        report = validate_workflow(wf)
+        if report["errors"]:
+            first = next(
+                (i for i in report["errors"] if i.get("node_id")),
+                report["errors"][0])
+            raise HTTPException(422, detail={
+                "message": "存在校验错误，运行被拒绝",
+                "errors": report["errors"],
+                "first_error_node": first.get("node_id")})
+        cfg = load_config(config_path)
+        runtime_wf = _prepare_runtime_workflow(wf, cfg, data_dir, task_id)
+        code_service, llm_service = \
+            deps.build_code_service(cfg), deps.build_llm_service(cfg)
+        engine = Engine(Workflow.from_dict(runtime_wf),
+                        llm_service=llm_service,
+                        code_service=code_service)
+        result = await engine.run(inputs, stream=False)
+
+        async def event_stream():
+            if result.get("status") != "waiting":
+                yield _sse({"type": "done",
+                            "status": result.get("status"),
+                            "result": result})
+                return
+            prepare_agent_task(data_dir, runtime_wf, result)
+            first_prompt = result.get("waiting_prompt") or ""
+            first_prompt_b64 = base64.urlsafe_b64encode(
+                first_prompt.encode("utf-8")).decode("ascii")
+            backend_root = data_dir.parent
+            driver_script = backend_root / "pi-agent" / "driver.mjs"
+            runtime_dir = data_dir / "runtime" / _safe_runtime_id(task_id)
+            if not driver_script.exists():
+                yield _sse({"type": "error",
+                            "msg": f"pi-agent 驱动脚本不存在: {driver_script}",
+                            "hint": "请先在 pi-agent/ 目录执行 npm install"})
+                return
+            try:
+                proc = await asyncio.create_subprocess_exec(
+                    _node_cmd(), str(driver_script),
+                    "--task-id", str(task_id),
+                    "--cwd", str(backend_root),
+                    "--workdir", str(runtime_dir),
+                    "--first-prompt-b64", first_prompt_b64,
+                    stdout=asyncio.subprocess.PIPE,
+                    stderr=asyncio.subprocess.PIPE)
+            except Exception as e:  # noqa: BLE001
+                yield _sse({"type": "error",
+                            "msg": f"启动 pi-agent 失败: {e}",
+                            "hint": "请确认已安装 Node.js 且已执行 npm config pi-agent 目录的依赖"})
+                return
+            while True:
+                line = await proc.stdout.readline()
+                if not line:
+                    break
+                text = line.decode("utf-8", "replace").strip()
+                if not text:
+                    continue
+                try:
+                    obj = json.loads(text)
+                except Exception:  # noqa: BLE001
+                    obj = {"type": "raw", "data": text}
+                yield _sse(obj)
+            tail = await proc.stderr.read()
+            if tail:
+                yield _sse({"type": "stderr",
+                            "data": tail.decode("utf-8", "replace")[-3000:]})
+            await proc.wait()
+            yield _sse({"type": "exit"})
 
         return StreamingResponse(event_stream(),
                                  media_type="text/event-stream")
@@ -402,6 +611,8 @@ def create_app(data_dir: str | Path) -> FastAPI:
             raise HTTPException(422, detail={
                 "message": "配置校验失败", "errors": errors})
         save_config(config_path, merged)
+        # 同步页面模型配置到 pi-agent，使 pi 模式使用同一模型
+        _sync_pi_agent_config(merged)
         return {"ok": True}
 
     @app.post("/api/config/test")
@@ -517,6 +728,16 @@ def _load_run_records(runs_dir: Path) -> list[dict]:
         if isinstance(data, dict) and "id" in data:
             records.append(data)
     return records
+
+
+def _sse(obj: Any) -> str:
+    """Format one SSE event carrying a JSON object."""
+    return f"data: {json.dumps(obj, ensure_ascii=False)}\n\n"
+
+
+def _node_cmd() -> str:
+    """Locate the node executable used to spawn the pi-agent driver."""
+    return shutil.which("node") or os.environ.get("PI_NODE", "node")
 
 
 def _ensure_task_id(inputs: dict[str, Any]) -> str:

@@ -57,13 +57,21 @@ def prepare_agent_task(data_dir: str | Path, workflow: dict,
     now = time.time()
     values = _plain_values(result.get("variables") or {})
     values[TASK_ID_VAR] = task_id
+    statuses: dict[str, str] = {}
+    for nd in workflow.get("nodes", []) or []:
+        if nd.get("type") == "start":
+            statuses[nd.get("id")] = "success"
+    w_node = result.get("waiting_node")
+    if w_node:
+        statuses[w_node] = "waiting"
     state = {
         TASK_ID_VAR: task_id,
         "created-at": now,
         "updated-at": now,
         "workflow": workflow,
         "variables": values,
-        "waiting-node": result.get("waiting_node"),
+        "waiting-node": w_node,
+        "node-statuses": statuses,
         "finished": False,
     }
     path = _task_path(data_dir, task_id)
@@ -85,6 +93,17 @@ def execute_agent_step(data_dir: str | Path, task_id: str, step_id: str,
                        ) -> dict[str, Any]:
     """Execute one Agent-entered Code node until the next Prompt or End."""
     state = _load_task(data_dir, task_id)
+    if state.get("finished"):
+        # 任务已完成：任何后续 step 调用都短路返回，避免重放已完成节点造成死循环。
+        return {
+            "status": "completed",
+            "task-id": task_id,
+            "variables": dict(state.get("variables") or {}),
+            "message": (
+                "任务已完成，工作流已结束。无需再次执行任何 step。\n\n"
+                f"task-id: {task_id}"
+            ),
+        }
     wf = state.get("workflow") or {}
     variables = dict(state.get("variables") or {})
     variables[TASK_ID_VAR] = task_id
@@ -92,6 +111,7 @@ def execute_agent_step(data_dir: str | Path, task_id: str, step_id: str,
     if not node or node.get("type") != "code":
         raise ValueError(f"--step-id 必须是实际 Code 节点 id: {step_id}")
 
+    statuses = dict(state.get("node-statuses") or {})
     entry_args = _step_args(node, step_param, variables)
     for name, value in entry_args.items():
         source = _input_source(node, name)
@@ -99,12 +119,18 @@ def execute_agent_step(data_dir: str | Path, task_id: str, step_id: str,
             variables[name] = value
         elif source not in variables and name in step_param:
             variables[source] = value
+    statuses[step_id] = "running"
+    state["node-statuses"] = statuses
+    _save_task(data_dir, state)
     try:
         _run_code_node(node, entry_args, variables, code_service)
+        statuses[step_id] = "success"
     except BaseException as exc:  # noqa: BLE001
+        statuses[step_id] = "error"
+        state["node-statuses"] = statuses
         prompt = _error_prompt(wf, node, variables, exc)
         if prompt is not None:
-            return _save_waiting(data_dir, state, variables, None, prompt)
+            return _save_waiting(data_dir, state, variables, None, prompt, statuses)
         raise
 
     queue: list[dict[str, Any]] = []
@@ -122,11 +148,13 @@ def execute_agent_step(data_dir: str | Path, task_id: str, step_id: str,
             raise RuntimeError(f"节点执行次数超过上限: {node_id}")
         ntype = current.get("type")
         if ntype == "llm":
+            statuses[node_id] = "waiting"
             prompt = _render_prompt(
                 wf, current, variables, from_error=bool(item.get("from_error")))
             return _save_waiting(data_dir, state, variables,
-                                 current.get("id"), prompt)
+                                 current.get("id"), prompt, statuses)
         if ntype == "end":
+            statuses[node_id] = "success"
             reached_end = True
             continue
         try:
@@ -144,22 +172,27 @@ def execute_agent_step(data_dir: str | Path, task_id: str, step_id: str,
                 handles = {"out"}
             else:
                 handles = {"out"}
+            statuses[node_id] = "success"
         except BaseException as exc:  # noqa: BLE001
             if ntype == "code":
+                statuses[node_id] = "error"
+                state["node-statuses"] = statuses
                 prompt = _error_prompt(wf, current, variables, exc)
                 if prompt is not None:
-                    return _save_waiting(data_dir, state, variables, None, prompt)
+                    return _save_waiting(data_dir, state, variables, None, prompt, statuses)
             raise
         _enqueue(wf, queue, node_id, handles)
 
     if reached_end:
         state["variables"] = variables
+        state["node-statuses"] = statuses
         state["finished"] = True
         _save_task(data_dir, state)
         return {
             "status": "completed",
             "task-id": task_id,
             "variables": variables,
+            "node-statuses": dict(statuses),
             "message": (
                 "任务已完成\n\n"
                 f"task-id: {task_id}\n\n"
@@ -202,10 +235,13 @@ def _save_task(data_dir: str | Path, state: dict[str, Any]) -> None:
 
 def _save_waiting(data_dir: str | Path, state: dict[str, Any],
                   variables: dict[str, Any], node_id: str | None,
-                  prompt: str) -> dict[str, Any]:
+                  prompt: str,
+                  statuses: dict[str, str] | None = None) -> dict[str, Any]:
     state["variables"] = variables
     state["waiting-node"] = node_id
     state["last-prompt"] = prompt
+    if statuses is not None:
+        state["node-statuses"] = statuses
     state["finished"] = False
     _save_task(data_dir, state)
     return {
@@ -214,6 +250,7 @@ def _save_waiting(data_dir: str | Path, state: dict[str, Any],
         "waiting_node": node_id,
         "prompt": prompt,
         "variables": variables,
+        "node-statuses": dict(state.get("node-statuses") or {}),
     }
 
 

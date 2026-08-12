@@ -62,6 +62,9 @@ fsm to skill解决的痛点:
 - **结构校验**：无环、单开始、变量可追溯、类型匹配、禁嵌套 For 等。
 - **替换转换skill**: 将已经编写好的复杂业务流程skill转换为 fsm skill，支持在应用中打开。
 - **稳定性保障**: code执行错误处理 、 节点重试次数 、状态机等待超时配置等。
+- **内置工具集**: 内置 `shell`（bash / powershell 自动识别）、`read_file`、`write_file` 工具，Agent 可直接执行命令、读写任务工作区文件。
+- **pi-agent 集成**: 内置 Node 驱动（`pi-agent/driver.mjs`），「运行」页一键以 pi-agent 模拟外部 Agent 端到端驱动 FSM Skill，实时转发进度与 Token 统计。
+- **FSM Skill 端到端验证**: 已通过 pi-agent 实测验证「执行 → Prompt → 再执行 → 终止」完整循环与 Terminal Prompt 收尾逻辑。
 
 ---
 
@@ -134,6 +137,18 @@ python run.py
 - **统计**：总耗时、各状态节点数、LLM 调用次数与 Token 用量、变量快照。
 - **日志**：全部引擎事件流，可「导出日志」为文本。
 - **单节点调试**：Code 节点可单独输入参数运行，快速验证脚本逻辑。
+- **pi-agent 运行**：内置 Node 驱动（`pi-agent/driver.mjs`），可模拟外部 Agent 端到端驱动 FSM Skill。
+
+---
+
+## pi-agent 集成
+
+「运行」页支持 **pi-agent 运行** 模式：后端把工作流推进到首个 Prompt 出口后，spawn `pi-agent/driver.mjs`（Node 子进程）充当外部 Agent，自主完成「读 Prompt → 调 LLM → 执行 Code step → 再读 Prompt」直到任务结束。
+
+- **实时转发**：首个 Prompt、后续每轮 Prompt / 模型回复 / 工具调用 / Token 统计均经 SSE 转发到界面。
+- **正确收尾**：driver 每轮交互后若未执行任何 step，会调用 `main.py --task-id X --finalize` 收尾，保证 Terminal Prompt 后任务正确结束，避免死循环。
+- **工作区隔离**：每个任务的独立工作区位于 `data/runtime/<safe_task_id>`，与项目根路径隔离。
+- **前置依赖**：需安装 Node.js，并在 `pi-agent/` 目录执行 `npm install`。
 
 ---
 
@@ -157,6 +172,8 @@ my-skill/
 - `scripts/main.py` 是导出 Skill 的总状态机线程；
 - **code 节点 = 入口**: 总线程由入参路由到各个code节点的入口并执行。
 - **Prompt 节点 = 出口**：引擎运行到 Prompt 节点即暂停，把渲染后的字符串返回给 Agent；Agent 的下一次调用再从一个 Code 节点进入。
+
+**内置 Agent 工具**：Agent 运行时内置 `shell`（bash / powershell 自动识别）、`read_file`、`write_file` 工具，可执行命令、读写任务工作区文件；本次发布已通过 pi-agent 端到端测试验证 FSM Skill 的完整执行循环。
 
 Agent 调用方式：
 

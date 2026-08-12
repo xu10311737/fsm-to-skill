@@ -60,6 +60,9 @@ Pain points fsm-to-skill solves:
 - **Structural validation**: acyclic, single start, variable traceability, type matching, no nested For, and more.
 - **SKILL conversion**: convert an already-written complex business-process SKILL into an fsm skill that opens in the app.
 - **Stability guarantees**: code execution error handling, node retry counts, state-machine wait-timeout configuration, and more.
+- **Built-in toolset**: built-in `shell` (auto-detects bash / powershell), `read_file`, and `write_file` tools, so the Agent can run commands and read/write files in the task workspace.
+- **pi-agent integration**: a built-in Node driver (`pi-agent/driver.mjs`) lets you drive the FSM Skill end-to-end with pi-agent as a mock external Agent from the Run page, forwarding progress and token stats in real time.
+- **FSM Skill end-to-end validation**: verified with pi-agent the full「execute → prompt → execute → terminate」loop, including Terminal Prompt finalization.
 
 ---
 
@@ -131,6 +134,18 @@ The browser opens `http://localhost:8000` automatically (default port; adjustabl
 - **Stats**: total time, node counts by state, LLM calls & token usage, variable snapshots.
 - **Logs**: full engine event stream; export logs as text.
 - **Single-node debug**: run a Code node alone with explicit params to quickly verify script logic.
+- **pi-agent run**: a built-in Node driver (`pi-agent/driver.mjs`) can simulate an external Agent to drive the FSM Skill end-to-end.
+
+---
+
+## pi-agent Integration
+
+The Run page supports **pi-agent run** mode: after the backend advances the workflow to the first Prompt exit, it spawns `pi-agent/driver.mjs` (a Node subprocess) to act as the external Agent, autonomously performing「read prompt → call LLM → execute Code step → read prompt」until the task finishes.
+
+- **Real-time forwarding**: the first prompt and every subsequent prompt / model reply / tool call / token stat are forwarded to the UI over SSE.
+- **Correct finalization**: if a driver round performs no step, it calls `main.py --task-id X --finalize` to end the task properly after a Terminal Prompt, preventing infinite loops.
+- **Workspace isolation**: each task gets its own workspace under `data/runtime/<safe_task_id>`, isolated from the project root.
+- **Prerequisites**: Node.js is required, and run `npm install` inside the `pi-agent/` directory first.
 
 ---
 
@@ -154,6 +169,8 @@ my-skill/
 - `scripts/main.py` is the total state-machine thread of the exported Skill;
 - **code node = entry**: the total thread routes the input to the entry of each code node and executes it.
 - **Prompt node = exit**: the engine pauses at a Prompt node, rendering the string and returning it to the Agent; the Agent's next call re-enters through a Code node.
+
+**Built-in Agent tools**: the Agent ships with `shell` (auto-detects bash / powershell), `read_file`, and `write_file` tools to run commands and read/write task-workspace files; this release validated the full FSM SKILL execution loop end-to-end with pi-agent.
 
 Agent invocation:
 
