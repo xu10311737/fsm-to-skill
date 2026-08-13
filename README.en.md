@@ -71,6 +71,7 @@ Pain points fsm-to-skill solves:
 ### Requirements
 
 - Python **3.10+** (3.12+ recommended)
+- Node.js **18+** (only required for pi-agent driver mode)
 
 ### Installation
 
@@ -91,6 +92,11 @@ pip install -r requirements.txt
 
 # 4. (Optional) dev / test dependencies
 pip install -r requirements-dev.txt
+
+# 5. Install the pi-agent driver dependencies (required for "pi-agent run" mode)
+cd pi-agent
+npm install
+cd ..
 ```
 
 ### Run

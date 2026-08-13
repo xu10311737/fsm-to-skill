@@ -73,6 +73,7 @@ fsm to skill解决的痛点:
 ### 环境要求
 
 - Python **3.10+**（推荐 3.12+）
+- Node.js **18+**（仅 pi-agent 驱动模式需要）
 
 ### 安装
 
@@ -94,6 +95,10 @@ pip install -r requirements.txt
 # 4.（可选）开发 / 运行测试依赖
 pip install -r requirements-dev.txt
 
+# 5. 安装 pi-agent 驱动依赖（使用「pi-agent 运行」模式时需要）
+cd pi-agent
+npm install
+cd ..
 ```
 
 ### 启动
