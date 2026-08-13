@@ -1,0 +1,14 @@
+{
+  "name": "fsm-pi-agent",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "description": "pi-agent 模拟外部 Agent 与 fsm-to-skill 交互的驱动脚本",
+  "scripts": {
+    "driver": "node driver.mjs"
+  },
+  "dependencies": {
+    "@earendil-works/pi-coding-agent": "^0.84.1",
+    "@earendil-works/pi-ai": "^0.84.1"
+  }
+}

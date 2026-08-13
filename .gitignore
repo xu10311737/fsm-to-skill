@@ -1,0 +1,60 @@
+# ===================== 上传策略 =====================
+# 需要上传的目录 / 文件：
+#   app/ static/ tests/ trans-fsm-skill/ images/
+#   main.py run.py requirements*.txt pytest.ini LICENSE README*.md
+#   pi-agent/driver.mjs pi-agent/package.json pi-agent/package-lock.json
+# 以下内容一律禁止上传（隐私 / 运行产物 / 依赖）。
+
+# ===== Python =====
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.eggs/
+build/
+dist/
+.venv/
+venv/
+env/
+
+# ===== 本地配置（含密钥，禁止提交） =====
+data/config.yaml
+
+# ===== 运行产物（任务状态/日志/运行时临时 skill，禁止提交） =====
+data/tasks/
+data/runs/
+data/runtime/
+
+# ===== 本地工作流（个人草稿，禁止提交） =====
+data/workflows/wf-*
+data/workflows/agent-complex.yaml
+
+# ===== 运行产物 / 导出目录 =====
+work/
+exports/
+
+# ===== 日志 =====
+*.log
+server_*.log
+_dbg*.txt
+_e2e*.txt
+
+# ===== IDE / 系统 =====
+.idea/
+.vscode/
+*.code-workspace
+.DS_Store
+Thumbs.db
+.codebuddy/
+
+# ===== 测试缓存 =====
+.pytest_cache/
+.pytest*/
+work/pytest_tmp/
+
+# ===== pi-agent：只上传源码，node_modules 依赖禁止提交 =====
+pi-agent/node_modules/
+pi-agent/*.log
+
+# ===== trans-fsm-skill 生成的技能包 =====
+trans-fsm-skill/outputs/
